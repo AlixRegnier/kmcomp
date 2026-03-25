@@ -1,8 +1,6 @@
 #include <tsp.h>
 #include <deque>
-#include <cstdint>
 #include <rng.h>
-#include <vector>
 
 //AVX2/SSE2
 #include <immintrin.h>
