@@ -38,7 +38,6 @@ set(BMS_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 add_library(bitmatrixshuffle)
 target_sources(bitmatrixshuffle PRIVATE
     ${BMS_SRC_DIR}/fast_median.cpp
-    ${BMS_SRC_DIR}/distance_matrix.cpp
     ${BMS_SRC_DIR}/rng.cpp
     ${BMS_SRC_DIR}/bitmatrixshuffle.cpp
     ${BMS_SRC_DIR}/tsp.cpp

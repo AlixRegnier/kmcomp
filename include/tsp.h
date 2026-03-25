@@ -1,9 +1,10 @@
 #ifndef TSP_H
 #define TSP_H
 
-#include <distance_matrix.h>
-#include <vptree.h>
+
+#include <cstdint>
 #include <utils.h>
+#include <vector>
 
 
 namespace bms
@@ -14,11 +15,8 @@ namespace bms
         double distance;
     } typedef IndexDistance;
 
-    //Build a path by iteratively pushing back closest vertex (from tail)
-    std::size_t build_NN(const char* const MATRIX, DistanceMatrix& distanceMatrix, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order);
-
     //Build a path by iteratively add closest vertex (compare closest from tail and closest from head), less sensitive to the first chosen vertex
-    std::size_t build_double_ended_NN(const char* const MATRIX, DistanceMatrix& distanceMatrix, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order);
+    std::size_t build_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order);
 
     //Distance computation between two columns
     double columns_hamming_distance(const char* const MATRIX, const std::size_t NB_ROWS, const std::size_t COLUMN_A, const std::size_t COLUMN_B);
