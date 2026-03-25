@@ -12,14 +12,8 @@
 
 namespace bms 
 {
-
     template <class T>
-    struct DistanceFunctions
-    {
-        std::function<double(T, T)> compute;
-        std::function<double(T, T)> get;
-        std::function<void(T, T, double)> store;
-    };
+    using DistanceFunction = std::function<double(const T&, const T&)>;
 
     template <class T>
     class VPTree
@@ -31,15 +25,13 @@ namespace bms
             bool skip = false;
             T pivot; //Vertex (or vertex identifier) that is used to split space in two parts
             double threshold; //Median of pivot distances from other vertices
-            DistanceFunctions<T>* distFunc;        
+            DistanceFunction<T> distFunc;        
         
             void init(const std::vector<T>& vertices);
         public:
-            VPTree(const std::vector<T>& vertices, DistanceFunctions<T>* distFunc);
+            VPTree(const std::vector<T>& vertices, const DistanceFunction<T>& distFunc);
 
             ~VPTree();
-
-            static DistanceFunctions<T> bind_distance_functions(std::function<double(T, T)> computeDistFunc, std::function<double(T, T)> getDistFunc, std::function<void(T, T, double)> setDistFunc);
 
             void get_unvisited_nearest_neighbor(T query, const std::vector<bool>& alreadyAdded, double* tau, T* currentResult);
     };

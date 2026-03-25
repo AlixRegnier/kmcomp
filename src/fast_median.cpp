@@ -6,7 +6,7 @@ namespace bms
 
     //Find median by sorting O(n.log(n))
     //But assumed to be O(1) for n < 5
-    double nlogn_median(std::vector<double>& distances)
+    double nlogn_median(const std::vector<double>& distances)
     {
         std::vector<double> d_copy(distances);
 
