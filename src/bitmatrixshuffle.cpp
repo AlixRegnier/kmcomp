@@ -196,65 +196,30 @@ namespace bms
         std::size_t computed_distances = 0;
         double original_consecutive_distances_sum = 0.0;
         double new_consecutive_distances_sum = 0.0;
-
-        DistanceMatrix distanceMatrix(groupsize);
         
         for(std::size_t i = 0; i + 1 < NB_GROUPS; ++i)
         {
             //Find a suboptimal path minimizing the weight of edges and visiting each node once
-            computed_distances += build_double_ended_NN(transposed_matrix, distanceMatrix, subsampled_rows, offset, order);
+            computed_distances += build_double_ended_NN(transposed_matrix, groupsize, subsampled_rows, offset, order);
             
             for(std::size_t j = 0; j + 1 < groupsize; ++j)
             {
-                if(distanceMatrix.get(j, j+1) == BMS_NULL_DISTANCE)
-                {
-                    double d = columns_hamming_distance(transposed_matrix, subsampled_rows, j+offset, j+1+offset);
-                    distanceMatrix.set(j, j+1, d);
-                    original_consecutive_distances_sum += d;
-                }
-                else
-                    original_consecutive_distances_sum += distanceMatrix.get(j, j+1);
-
-                if(distanceMatrix.get(order[j+offset]-offset, order[j+1+offset]-offset) == BMS_NULL_DISTANCE)
-                {
-                    double d = columns_hamming_distance(transposed_matrix, subsampled_rows, order[j+offset], order[j+1+offset]);
-                    distanceMatrix.set(order[j+offset]-offset, order[j+1+offset]-offset, d);
-                    new_consecutive_distances_sum += d;
-                }
-                else
-                    new_consecutive_distances_sum += distanceMatrix.get(order[j+offset]-offset, order[j+1+offset]-offset);
+                original_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, j+offset, j+1+offset);
+                new_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, order[j+offset], order[j+1+offset]);;
             }
 
             offset += groupsize;
-            distanceMatrix.reset(); //Clean distance matrix
         }
 
-        distanceMatrix.resize(last_group_size);
-        computed_distances += build_double_ended_NN(transposed_matrix, distanceMatrix, subsampled_rows, offset, order);
+        computed_distances += build_double_ended_NN(transposed_matrix, last_group_size, subsampled_rows, offset, order);
 
         for(std::size_t j = 0; j + 1 < last_group_size; ++j)
         {
-            if(distanceMatrix.get(j, j+1) == BMS_NULL_DISTANCE)
-            {
-                double d = columns_hamming_distance(transposed_matrix, subsampled_rows, j+offset, j+1+offset);
-                distanceMatrix.set(j, j+1, d);
-                original_consecutive_distances_sum += d;
-            }
-            else
-                original_consecutive_distances_sum += distanceMatrix.get(j, j+1);
-
-            if(distanceMatrix.get(order[j+offset]-offset, order[j+1+offset]-offset) == BMS_NULL_DISTANCE)
-            {
-                double d = columns_hamming_distance(transposed_matrix, subsampled_rows, order[j+offset], order[j+1+offset]);
-                distanceMatrix.set(order[j+offset]-offset, order[j+1+offset]-offset, d);
-                new_consecutive_distances_sum += d;
-            }
-            else
-                new_consecutive_distances_sum += distanceMatrix.get(order[j+offset]-offset, order[j+1+offset]-offset);
+            original_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, j+offset, j+1+offset);;
+            new_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, order[j+offset], order[j+1+offset]);
         }
-
-
         END_TIMER;
+        
         metrics["3_time_permutation(s)"] = GET_TIMER; 
         
         std::size_t max_computable_distances = (groupsize * (groupsize - 1) / 2) * (NB_GROUPS - 1) + last_group_size * (last_group_size - 1) / 2;

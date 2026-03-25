@@ -150,57 +150,16 @@ const uint8_t lookup8bit[256] = {
 
 namespace bms {
 
-    //TSP path, returns the number of computed distances
-    std::size_t build_NN(const char* const MATRIX, DistanceMatrix& distanceMatrix, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order)
-    {
-        //Pick a random first vertex
-        std::uint64_t firstVertex = RNG::rand_uint32_t(0, distanceMatrix.width());
-        
-        //Vector of added vertices (set true for the first vertex)
-        std::vector<bool> alreadyAdded;
-        alreadyAdded.resize(distanceMatrix.width());
-        alreadyAdded[firstVertex] = true;
-
-        //Deque for building path with first vertex as starting point
-        std::vector<std::uint64_t> path = {firstVertex};
-        path.reserve(distanceMatrix.width());
-
-        //Build vector of indices for VPTree
-        std::vector<std::uint64_t> vertices;
-        vertices.resize(distanceMatrix.width());
-        for(std::size_t i = 0; i < vertices.size(); ++i)
-            vertices[i] = i;
-
-        std::size_t counter = 0;
-
-        //Added second vertex to data structures
-        //Find next vertices to add by checking which is the minimum to take
-        for(std::size_t i = 1; i < distanceMatrix.width(); ++i)
-        {
-            IndexDistance match = find_closest_vertex(MATRIX, path[i-1], alreadyAdded, SUBSAMPLED_ROWS, OFFSET, counter);
-            alreadyAdded[match.index] = true;
-            path.push_back(match.index);
-        }
-
-        //std::cout << "\tComputed distances (VPTree): " << counter << "/" << (distanceMatrix.width() * (distanceMatrix.width() - 1) / 2) <<  std::endl;
-
-        //Store global order
-        for(std::size_t i = 0; i < distanceMatrix.width(); ++i)
-            order[i+OFFSET] = path[i] + OFFSET; //Add offset because columns are addressed by their global location
-    
-        return counter;
-    }
-
 
     //TSP path filled by both ends, less sensitive of the first chosen vertex, returns the number of computed distances
-    std::size_t build_double_ended_NN(const char* const MATRIX, DistanceMatrix& distanceMatrix, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order)
+    std::size_t build_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order)
     {
         //Pick a random first vertex
-        std::uint64_t firstVertex = RNG::rand_uint32_t(0, distanceMatrix.width());
+        std::uint64_t firstVertex = RNG::rand_uint32_t(0, COLUMNS);
         
         //Vector of added vertices (set true for the first vertex)
         std::vector<bool> alreadyAdded;
-        alreadyAdded.resize(distanceMatrix.width());
+        alreadyAdded.resize(COLUMNS);
         alreadyAdded[firstVertex] = true;
 
         //Deque for building path with first vertex as starting point
@@ -208,7 +167,7 @@ namespace bms {
 
         //Build vector of indices for VPTree
         std::vector<std::uint64_t> vertices;
-        vertices.resize(distanceMatrix.width());
+        vertices.resize(COLUMNS);
         for(std::size_t i = 0; i < vertices.size(); ++i)
             vertices[i] = i;
 
@@ -227,7 +186,7 @@ namespace bms {
         IndexDistance b = find_closest_vertex(MATRIX, orderDeque.back(), alreadyAdded, SUBSAMPLED_ROWS, OFFSET, counter);
 
         //Find next vertices to add by checking which is the minimum to take
-        for(std::size_t i = 2; i < distanceMatrix.width(); ++i)
+        for(std::size_t i = 2; i < COLUMNS; ++i)
         {
             if(a.distance < b.distance)
             {
@@ -251,10 +210,10 @@ namespace bms {
             }
         }
 
-        //std::cout << "\tComputed distances (VPTree): " << counter << "/" << (distanceMatrix.width() * (distanceMatrix.width() - 1) / 2) <<  std::endl;
+        //std::cout << "\tComputed distances (VPTree): " << counter << "/" << (COLUMNS * (COLUMNS - 1) / 2) <<  std::endl;
 
         //Store global order
-        for(std::size_t i = 0; i < distanceMatrix.width(); ++i)
+        for(std::size_t i = 0; i < COLUMNS; ++i)
             order[i+OFFSET] = orderDeque[i] + OFFSET; //Add offset because columns are addressed by their global location
         
         return counter;
