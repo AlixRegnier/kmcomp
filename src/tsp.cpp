@@ -160,7 +160,7 @@ namespace bms {
         std::vector<bool> alreadyAdded;
         alreadyAdded.resize(COLUMNS);
         alreadyAdded[firstVertex] = true;
-
+        
         //Deque for building path with first vertex as starting point
         std::deque<std::uint64_t> orderDeque = {firstVertex};
 
@@ -177,12 +177,21 @@ namespace bms {
                 return columns_hamming_distance(MATRIX, SUBSAMPLED_ROWS, a+OFFSET, b+OFFSET);
             });
 
+        //Map VPTree nodes in a vector
+        std::vector<VPTree<std::uint64_t>*> nodes_map;
+        nodes_map.resize(COLUMNS);
+        VPTree<std::uint64_t>::map_nodes(&root, nodes_map);
+
+        //Update vertex flag
+        VPTree<std::uint64_t>::update(nodes_map[firstVertex], alreadyAdded);
+
         //Find second vertex
         IndexDistance second = find_closest_vertex(root, firstVertex, alreadyAdded);
         
         //Added second vertex to data structures
         orderDeque.push_back(second.index);
         alreadyAdded[second.index] = true;
+        VPTree<std::uint64_t>::update(nodes_map[second.index], alreadyAdded);
 
         //Find closest vertices from path front and back
         IndexDistance a = find_closest_vertex(root, orderDeque.front(), alreadyAdded);
@@ -195,6 +204,7 @@ namespace bms {
             {
                 orderDeque.push_front(a.index);
                 alreadyAdded[a.index] = true;
+                VPTree<std::uint64_t>::update(nodes_map[a.index], alreadyAdded);
 
                 if(a.index == b.index)
                     b = find_closest_vertex(root, orderDeque.back(), alreadyAdded);
@@ -203,8 +213,10 @@ namespace bms {
             }
             else
             {
+
                 orderDeque.push_back(b.index);
                 alreadyAdded[b.index] = true;
+                VPTree<std::uint64_t>::update(nodes_map[b.index], alreadyAdded);
 
                 if(b.index == a.index)
                     a = find_closest_vertex(root, orderDeque.front(), alreadyAdded);
@@ -222,7 +234,8 @@ namespace bms {
 
     IndexDistance find_closest_vertex(VPTree<std::uint64_t>& VPTREE, const std::uint64_t VERTEX, const std::vector<bool>& ALREADY_ADDED)
     {
-        IndexDistance nn = {0, 2.0};
+        IndexDistance nn = { 0, 2.0 };
+
         VPTREE.get_unvisited_nearest_neighbor(VERTEX, ALREADY_ADDED, &nn.distance, &nn.index);
 
         return nn;

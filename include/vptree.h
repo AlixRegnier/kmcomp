@@ -21,6 +21,7 @@ namespace bms
         private:
             VPTree* left = nullptr;
             VPTree* right = nullptr;
+            VPTree* parent = nullptr;
             
             bool skip = false;
             T pivot; //Vertex (or vertex identifier) that is used to split space in two parts
@@ -28,12 +29,18 @@ namespace bms
             DistanceFunction<T> distFunc;        
         
             void init(const std::vector<T>& vertices);
+
+            VPTree(VPTree<T>*, const std::vector<T>& vertices, const DistanceFunction<T>& distFunc);
         public:
             VPTree(const std::vector<T>& vertices, const DistanceFunction<T>& distFunc);
 
             ~VPTree();
 
             void get_unvisited_nearest_neighbor(T query, const std::vector<bool>& alreadyAdded, double* tau, T* currentResult);
+
+            static void update(VPTree<T>* node, const std::vector<bool>& alreadyAdded);
+
+            static void map_nodes(VPTree<T>* root, std::vector<VPTree<T>*>& out_vector);
     };
 }
 

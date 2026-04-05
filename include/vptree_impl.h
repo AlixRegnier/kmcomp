@@ -5,10 +5,10 @@
 
 namespace bms 
 {
-
     template <class T>
-    VPTree<T>::VPTree(const std::vector<T>& vertices, const DistanceFunction<T>& distFunc)
+    VPTree<T>::VPTree(VPTree* parent, const std::vector<T>& vertices, const DistanceFunction<T>& distFunc)
     {
+        this->parent = parent;
         this->distFunc = distFunc;
         
         if(vertices.size() == 0)
@@ -72,11 +72,14 @@ namespace bms
         }
 
         if(leftVertices.size() > 0)
-            left = new VPTree(leftVertices, distFunc);
+            left = new VPTree(this, leftVertices, distFunc);
 
         if(rightVertices.size() > 0)
-            right = new VPTree(rightVertices, distFunc);
+            right = new VPTree(this, rightVertices, distFunc);
     }
+
+    template <class T>
+    VPTree<T>::VPTree(const std::vector<T>& vertices, const DistanceFunction<T>& distFunc) : VPTree(nullptr, vertices, distFunc) {}
 
     template <class T>
     VPTree<T>::~VPTree()
@@ -121,9 +124,34 @@ namespace bms
             if(left != nullptr && !left->skip && (distance - *tau) <= threshold)
                 left->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult);
         }
+    }
 
-        //Node can be skipped if both children can be skipped and current pivot was already added
-        skip = (left == nullptr || left->skip) && (right == nullptr || right->skip) && alreadyAdded[pivot];
+    template <class T>
+    void VPTree<T>::update(VPTree<T>* node, const std::vector<bool>& alreadyAdded)
+    {
+        while(node != nullptr)
+        {
+            node->skip = (node->left == nullptr || node->left->skip) && (node->right == nullptr || node->right->skip) && alreadyAdded[node->pivot];
+            
+            //Stop property propagation if not masked
+            if(!node->skip)
+                return;
+
+            node = node->parent;
+        }
+    }
+
+    //Fail if vector is not big enough (should be size = n)
+    template <class T>
+    void VPTree<T>::map_nodes(VPTree<T>* node, std::vector<VPTree<T>*>& out_vector)
+    {
+        if(node == nullptr)
+            return;
+
+        out_vector[node->pivot] = node;
+
+        map_nodes(node->left, out_vector);
+        map_nodes(node->right, out_vector);
     }
 };
 
