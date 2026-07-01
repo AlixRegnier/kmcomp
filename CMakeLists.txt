@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(BitmatrixShuffle VERSION 0.1.0 LANGUAGES CXX)
+project(kmcomp VERSION 0.1.0 LANGUAGES CXX)
 
 # Set C++17 standard
 set(CMAKE_CXX_STANDARD 17)
@@ -35,8 +35,8 @@ include_directories(
 set(BMS_SRC_DIR ${PROJECT_SOURCE_DIR}/src)
 set(BMS_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 
-add_library(bitmatrixshuffle)
-target_sources(bitmatrixshuffle PRIVATE
+add_library(kmcomp)
+target_sources(kmcomp PRIVATE
     ${BMS_SRC_DIR}/fast_median.cpp
     ${BMS_SRC_DIR}/distance_matrix.cpp
     ${BMS_SRC_DIR}/rng.cpp
@@ -44,22 +44,23 @@ target_sources(bitmatrixshuffle PRIVATE
     ${BMS_SRC_DIR}/tsp.cpp
 )
 
-target_link_libraries(bitmatrixshuffle PRIVATE bms_build_type_flags sdsl-lite zstd_ext block_compressor_ext)
-target_include_directories(bitmatrixshuffle PUBLIC
+target_link_libraries(kmcomp PRIVATE bms_build_type_flags sdsl-lite zstd_ext block_compressor_ext)
+target_include_directories(kmcomp PUBLIC
     $<BUILD_INTERFACE:${BMS_INCLUDE_DIR}>
     $<INSTALL_INTERFACE:include>
 )
-add_dependencies(bitmatrixshuffle block_compressor_ext)
+add_dependencies(kmcomp block_compressor_ext)
 
 if(BMS_BUILD_MAIN)
-    add_executable(main_bitmatrixshuffle
-        ${BMS_SRC_DIR}/main_bitmatrixshuffle.cpp
+    add_executable(main_kmcomp
+        ${BMS_SRC_DIR}/main_kmcomp.cpp
     )
-    target_link_libraries(main_bitmatrixshuffle PRIVATE bms_build_type_flags)
-    target_include_directories(main_bitmatrixshuffle PUBLIC
+    set_target_properties(main_kmcomp PROPERTIES OUTPUT_NAME "kmcomp")
+    target_link_libraries(main_kmcomp PRIVATE bms_build_type_flags)
+    target_include_directories(main_kmcomp PUBLIC
         $<BUILD_INTERFACE:${BMS_INCLUDE_DIR}>
         $<INSTALL_INTERFACE:include>
     )
-    target_link_libraries(main_bitmatrixshuffle PRIVATE cxxopts_ext zstd_ext sdsl-lite block_compressor_ext bitmatrixshuffle)
-    add_dependencies(main_bitmatrixshuffle bitmatrixshuffle block_compressor_ext cxxopts_ext)
+    target_link_libraries(main_kmcomp PRIVATE cxxopts_ext zstd_ext sdsl-lite block_compressor_ext kmcomp)
+    add_dependencies(main_kmcomp kmcomp block_compressor_ext cxxopts_ext)
 endif()

@@ -1,4 +1,4 @@
-# BitmatrixShuffle
+# kmcomp
 
 ## About
 
@@ -28,7 +28,7 @@ There is a binary that is compiled by default when using build script. It allows
 ### Usage
 
 ```
-./main_bitmatrixshuffle -i <path> -c <columns> [-b <blocksize>] [--compress-to <path>] [-f <path> [-r]] [-g <groupsize>] [--header <headersize>] [-s <subsamplesize>] [-t <path>]
+./kmcomp -i <path> -c <columns> [-b <blocksize>] [--compress-to <path>] [-f <path> [-r]] [-g <groupsize>] [--header <headersize>] [-s <subsamplesize>] [-t <path>]
 ```
 
 
