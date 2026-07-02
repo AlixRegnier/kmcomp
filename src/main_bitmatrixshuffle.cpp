@@ -26,6 +26,8 @@ int main(int argc, char ** argv)
     
     unsigned header = 0;
     unsigned preset_level = 3;
+    unsigned wlog = 0;
+
     double threshold = 0.0;
     std::size_t groupsize = 0;
     std::size_t subsampled_rows = 20000;
@@ -60,9 +62,21 @@ int main(int argc, char ** argv)
             ("s,subsample-size", "Number of rows to use for distance computation {20000}.", cxxopts::value<std::size_t>())
             ("threshold", "Reorder only if permutation would improve compression more than given percent (%).", cxxopts::value<short>())
             ("t,to-order", "Write out permutation file to path.", cxxopts::value<std::string>())
+            ("wlog", "Zstd wlog size (dictionary size)", cxxopts::value<unsigned>())
             ("config-path", "Path to config file {config.cfg}.", cxxopts::value<std::string>());
 
         auto args = options.parse(argc, argv);
+
+        if (args.count("wlog"))
+        {
+            wlog = args["wlog"].as<unsigned>();
+
+            if(wlog != 0 && (wlog < 10 || wlog > 31))
+            {
+                std::cerr << "Error: wlog must be 0 (default value) or between 10 and 31.\nSee https://facebook.github.io/zstd/zstd_manual.html\n";
+                return 1;
+            }
+        }
 
         if (args.count("help"))
         {
@@ -307,7 +321,7 @@ int main(int argc, char ** argv)
         else 
         {
             //Reorder and compress matrix
-            bms::reorder_matrix_columns_and_compress(input_path, output_path, output_ef_path, config_path, header, columns, NB_ROWS, order, target_block_size);
+            bms::reorder_matrix_columns_and_compress(input_path, output_path, output_ef_path, config_path, header, columns, NB_ROWS, order, target_block_size, wlog);
         }
     }
     else if(!no_reorder)
