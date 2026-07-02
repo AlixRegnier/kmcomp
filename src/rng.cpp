@@ -1,6 +1,6 @@
 #include <rng.h>
 
-namespace bms
+namespace kmcomp
 {
     std::uint32_t RNG::rand_uint32_t(unsigned a, unsigned b) //Generate an unsigned integer in [a ; b[
     {

@@ -1,4 +1,4 @@
-#include <bitmatrixshuffle.h>
+#include <kmcomp.h>
 
 //AVX2/SSE2
 #include <immintrin.h>
@@ -9,7 +9,7 @@
 #define GET_ROW_PTR(x) (mapped_file+HEADER+((std::size_t)(x))*ROW_LENGTH)
 #define GET_BLOCK_PTR(x) (mapped_file+HEADER+((std::size_t)(x))*BLOCK_SIZE)
 
-namespace bms
+namespace kmcomp
 {
     // Code from https://mischasan.wordpress.com/2011/10/03/the-full-sse2-bit-matrix-transpose-routine/
     #define INP(x, y) inp[(x)*ncols/8 + (y)/8]
@@ -28,7 +28,7 @@ namespace bms
         } tmp;
 
         if(nrows % 8 != 0 || ncols % 8 != 0)
-            throw std::invalid_argument("Matrix transposition: Number of columns and of rows must be both multiple of 8.");
+            throw std::invalid_argument("[ERROR] kmcomp::__sse2_trans : Number of columns and of rows must be both multiple of 8.");
     
         // Do the main body in 16x8 blocks:
         for ( rr = 0; rr + 16 <= nrows; rr += 16 )
@@ -74,50 +74,7 @@ namespace bms
     #undef II
     #undef OUT
     #undef INP
-    /*//Extract bit from a buffer of bytes (big-endian), result can only be 0x00 or 0x01
-    char get_bit_from_position(const char* const BYTES, const unsigned POSITION);
-
-    //Swaps the bits of a buffer into another buffer according to given order
-    void permute_buffer_order(const char* const BUFFER, char* outBuffer, const unsigned* const ORDER, const unsigned ORDER_LENGTH);
     
-    //Retrieve bit at given POSITION in buffer BYTES
-    char get_bit_from_position(const char * const BYTES, const unsigned POSITION)
-    {
-        //Equivalent instruction that is compiled to the same assembly code than second one
-        //return (bytes[position >> 3] >> (8 - (position % 8) - 1)) & (char)1;
-
-        return (BYTES[POSITION >> 3] >> (~POSITION & 0x7U)) & (char)1;
-    }
-
-    //Swaps the bits of a buffer into another buffer according to given order)
-    void permute_row_bits(const char * const BUFFER, char * outBuffer, const unsigned * const ORDER, const std::size_t ORDER_LENGTH)
-    {
-        //Permute bits within bytes of a buffer according to a given order
-        //order[i] tells that the position i has to store the bit at position order[i]
-
-        for(unsigned i = 0; i < ORDER_LENGTH; ++i)
-            outBuffer[i >> 3] = (outBuffer[i >> 3] << 1) | get_bit_from_position(BUFFER, ORDER[i]);
-    }
-
-    //DEPRECATED: Reorder matrix columns row by row (bit-swapping on memory-mapped file)
-    //Very slow but is SIMD-free
-    void reorder_matrix_columns(char * mapped_file, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t ROW_LENGTH, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER)
-    {
-        //Buffer to copy a row
-        char * buffer = new char[ROW_LENGTH];
-
-        //Swap columns in each rows
-        for(std::size_t i = 0; i < NB_ROWS; ++i)
-        {
-            std::memcpy(buffer, GET_ROW_PTR(i), ROW_LENGTH);
-            
-            //Swap row bits
-            permute_buffer_order(buffer, GET_ROW_PTR(i), ORDER.data(), NB_COLS);
-        }
-
-        delete[] buffer;
-    }*/
-
     std::size_t target_block_nb_rows(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE)
     {
         const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
@@ -133,26 +90,17 @@ namespace bms
         //Block size will most of time be slightly bigger than targeted size
         return ROW_LENGTH * target_block_nb_rows(NB_COLS, BLOCK_TARGET_SIZE); 
     }
-
-    std::size_t estimate_computations(std::size_t n1, std::size_t n2, std::size_t x1)
-    {
-        #define OMEGA(n) ((n)*std::log2((n)))
-        #define BIGO(n)  (((n)*((n)-1))/2.0)
-
-        return (std::size_t)(OMEGA(n2) + (BIGO(n2)-OMEGA(n2))/(BIGO(n1)-OMEGA(n1)) * (x1-OMEGA(n1)));
-
-        #undef OMEGA
-        #undef BIGO
-    }
   
     double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, std::size_t groupsize, std::size_t subsampled_rows, std::vector<std::uint64_t>& order)
     {
+        #ifdef KMCOMP_METRICS
         DECLARE_TIMER;
         START_TIMER;
+        #endif
 
         int fd = open(MATRIX_PATH.c_str(), O_RDONLY); 
         if(fd < 0)
-            throw std::runtime_error("BMS-ERROR: Failed to open a file descriptor on reference matrix");
+            throw std::runtime_error("[ERROR] kmcomp::compute_order_from_matrix_columns : Failed to open a file descriptor on reference matrix.");
 
         const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
         const std::size_t FILE_SIZE = HEADER + ROW_LENGTH * NB_ROWS;
@@ -166,18 +114,18 @@ namespace bms
             subsampled_rows = NB_ROWS / 8 * 8;
 
         if(subsampled_rows > NB_ROWS)
-            throw std::invalid_argument("BMS-ERROR: Number of subsampled rows can't be greater to the number of rows in the binary matrix. Maybe one of the parameters is wrong ?");
+            throw std::invalid_argument("[ERROR] kmcomp::compute_order_from_matrix_columns : Number of subsampled rows can't be greater to the number of rows in the binary matrix. Maybe one of the parameters is wrong ?");
 
         if(subsampled_rows % 8 != 0)
-            throw std::invalid_argument("BMS-ERROR: Number of subsampled rows is not a multiple of 8. Maybe your matrix has less than 8 rows ?");
+            throw std::invalid_argument("[ERROR] kmcomp::compute_order_from_matrix_columns : Number of subsampled rows is not a multiple of 8. Maybe your matrix has less than 8 rows ?");
        
         if(groupsize % 8 != 0)
-            throw std::invalid_argument("BMS-ERROR: The size of a group of columns must be a multiple of 8 (for transposition)");
+            throw std::invalid_argument("[ERROR] kmcomp::compute_order_from_matrix_columns : The size of a group of columns must be a multiple of 8 (for transposition).");
 
         if(groupsize == 0 || groupsize > ROW_LENGTH*8)
             groupsize = ROW_LENGTH * 8;
 
-        char * transposed_matrix = BMS_ALLOCATE_MATRIX(subsampled_rows, ROW_LENGTH*8);
+        char * transposed_matrix = KMCOMP_ALLOCATE_MATRIX(subsampled_rows, ROW_LENGTH*8);
         __sse2_trans(reinterpret_cast<const std::uint8_t*>(mapped_file+HEADER), reinterpret_cast<std::uint8_t*>(transposed_matrix), subsampled_rows, ROW_LENGTH*8);
 
         std::size_t last_group_size;
@@ -218,8 +166,9 @@ namespace bms
             original_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, j+offset, j+1+offset);;
             new_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, order[j+offset], order[j+1+offset]);
         }
-        END_TIMER;
         
+        #ifdef KMCOMP_METRICS
+        END_TIMER;
         metrics["3_time_permutation(s)"] = GET_TIMER; 
         
         std::size_t max_computable_distances = (groupsize * (groupsize - 1) / 2) * (NB_GROUPS - 1) + last_group_size * (last_group_size - 1) / 2;
@@ -254,13 +203,15 @@ namespace bms
         metrics["2b_consecutive_column_distance_var_reorder"] = new_consecutive_distances_variance;
         metrics["2b_consecutive_column_distance_stdev_original"] = original_consecutive_distances_stdev;
         metrics["2b_consecutive_column_distance_stdev_reorder"] = new_consecutive_distances_stdev;
-        metrics["2b_metric_reordering_compressibility_factor"] = 1.0 * original_consecutive_distances_average / new_consecutive_distances_average;
-      
-        BMS_DELETE_MATRIX(transposed_matrix);
+        metrics["2b_pigain"] = 1.0 * original_consecutive_distances_sum / new_consecutive_distances_sum;
+        #endif
+
+        KMCOMP_DELETE_MATRIX(transposed_matrix);
 
         return original_consecutive_distances_sum / new_consecutive_distances_sum;
     }
 
+    #ifdef KMCOMP_METRICS
     void __count_bytes(const std::uint8_t * bytes, const std::size_t length, std::uint64_t * counts)
     {
         for(std::size_t i = 0; i < length; ++counts[bytes[i++]]);
@@ -290,6 +241,61 @@ namespace bms
         return entropy;
     }
 
+    double get_block_entropy(const char * block_ptr, const std::size_t BLOCK_SIZE, std::uint64_t * counts)
+    {
+        __count_bytes(reinterpret_cast<const std::uint8_t*>(block_ptr), BLOCK_SIZE, counts);
+        return compute_byte_entropy(counts);
+    }
+
+    double get_entropy_ratio(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, std::size_t SAMPLED_BYTES)
+    {
+        //Get row length in bytes
+        const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
+
+        //Compute the number of rows in a block and round to next multiple of 8
+        const std::size_t BLOCK_NB_ROWS = target_block_nb_rows(NB_COLS, SAMPLED_BYTES);
+
+        //Block size will most of time be slightly bigger than targeted size
+        const std::size_t BLOCK_SIZE = target_block_size(NB_COLS, SAMPLED_BYTES);
+
+        //Compute last block size
+        std::size_t last_block_size = (NB_ROWS % BLOCK_NB_ROWS) * ROW_LENGTH;
+        if(last_block_size == 0)
+            last_block_size = BLOCK_SIZE; //Each blocks are full, so last is full
+
+        char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
+        char * transposed_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
+
+        int fd = open(MATRIX_PATH.c_str(), O_RDONLY);
+
+        //Skip header
+        lseek(fd, HEADER, SEEK_SET);
+
+        std::uint64_t count_bytes_original[256] = {};
+        std::uint64_t count_bytes_reordered[256] = {};
+
+
+        ssize_t read_bytes = read(fd, buffered_block, BLOCK_SIZE);
+        close(fd);
+
+        if(read_bytes == -1)
+            throw std::runtime_error("[ERROR] kmcomp::get_entropy_ratio : An error occured while trying to read input matrix.");
+
+        if(read_bytes % ROW_LENGTH != 0)
+            throw std::runtime_error("[ERROR] kmcomp::get_entropy_ratio : Input matrix size is not a multiple of the size of a row.");
+
+        double entropy_original = get_block_entropy(buffered_block, read_bytes, count_bytes_original);
+        reorder_block(buffered_block, transposed_block, buffered_block, read_bytes, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+        double entropy_reordered = get_block_entropy(buffered_block, read_bytes, count_bytes_reordered);
+
+        KMCOMP_DELETE_MATRIX(buffered_block);
+        KMCOMP_DELETE_MATRIX(transposed_block);
+
+        return entropy_original / entropy_reordered;
+    }
+
+    #endif
+
     void reorder_block(const char * input_block, char * tmp_block, char * output_block, const std::size_t BLOCK_SIZE, const std::size_t BLOCK_NB_ROWS, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER)
     {
         //Copy block from disk to memory
@@ -305,13 +311,6 @@ namespace bms
         //Transpose matrix block back
         __sse2_trans(reinterpret_cast<const std::uint8_t*>(tmp_block), reinterpret_cast<std::uint8_t*>(output_block), ROW_LENGTH*8, BLOCK_NB_ROWS);
     }
-
-    double get_block_entropy(const char * block_ptr, const std::size_t BLOCK_SIZE, std::uint64_t * counts)
-    {
-        __count_bytes(reinterpret_cast<const std::uint8_t*>(block_ptr), BLOCK_SIZE, counts);
-        return compute_byte_entropy(counts);
-    }
-
 
     void reorder_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, const std::size_t BLOCK_TARGET_SIZE)
     {
@@ -335,14 +334,14 @@ namespace bms
         if(last_block_size == 0)
             last_block_size = BLOCK_SIZE; //Each blocks are full, so last is full
 
-        char * buffered_block = BMS_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
-        char * transposed_block = BMS_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
+        char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
+        char * transposed_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
     
         int fd = open(MATRIX_PATH.c_str(), O_RDWR);
         char * mapped_file = (char*)mmap(nullptr, FILE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
         if(mapped_file == MAP_FAILED)
-            throw std::runtime_error("BMS-ERROR: mmap() failed for reordering matrix");
+            throw std::runtime_error("[ERROR] kmcomp::reorder_matrix_columns : mmap() failed for reordering matrix.");
 
         //Tell system that data will be accessed sequentially
         posix_madvise(mapped_file, FILE_SIZE, POSIX_MADV_SEQUENTIAL);
@@ -363,63 +362,18 @@ namespace bms
         //Copy last block from memory to disk 
         std::memcpy(GET_BLOCK_PTR(i), buffered_block, last_block_size);
 
-        BMS_DELETE_MATRIX(buffered_block);
-        BMS_DELETE_MATRIX(transposed_block);
+        KMCOMP_DELETE_MATRIX(buffered_block);
+        KMCOMP_DELETE_MATRIX(transposed_block);
 
         munmap(mapped_file, FILE_SIZE);
         close(fd);
     }
 
-    double get_entropy_ratio(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, std::size_t SAMPLED_BYTES)
+    void reorder_matrix_columns_and_compress(const std::string& MATRIX_PATH, const std::string& OUTPUT_PATH, const std::string& OUTPUT_EF_PATH, const std::string& CONFIG_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, std::size_t BLOCK_TARGET_SIZE)
     {
-        //Get row length in bytes
-        const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
-
-        //Compute the number of rows in a block and round to next multiple of 8 
-        const std::size_t BLOCK_NB_ROWS = target_block_nb_rows(NB_COLS, SAMPLED_BYTES);
-
-        //Block size will most of time be slightly bigger than targeted size
-        const std::size_t BLOCK_SIZE = target_block_size(NB_COLS, SAMPLED_BYTES); 
-        
-        //Compute last block size
-        std::size_t last_block_size = (NB_ROWS % BLOCK_NB_ROWS) * ROW_LENGTH;
-        if(last_block_size == 0)
-            last_block_size = BLOCK_SIZE; //Each blocks are full, so last is full
-
-        char * buffered_block = BMS_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
-        char * transposed_block = BMS_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
-    
-        int fd = open(MATRIX_PATH.c_str(), O_RDONLY);
-
-        //Skip header
-        lseek(fd, HEADER, SEEK_SET);
-
-        std::uint64_t count_bytes_original[256] = {};
-        std::uint64_t count_bytes_reordered[256] = {};
-
-        
-        ssize_t read_bytes = read(fd, buffered_block, BLOCK_SIZE);
-        close(fd); 
-
-        if(read_bytes == -1)
-            throw std::runtime_error("BMS-ERROR: An error occured while trying to read input matrix");
-        
-        if(read_bytes % ROW_LENGTH != 0)
-            throw std::runtime_error("BMS-ERROR: Input matrix size is not a multiple of the size of a row");
-
-        double entropy_original = get_block_entropy(buffered_block, read_bytes, count_bytes_original);
-        reorder_block(buffered_block, transposed_block, buffered_block, read_bytes, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
-        double entropy_reordered = get_block_entropy(buffered_block, read_bytes, count_bytes_reordered);
-        
-        BMS_DELETE_MATRIX(buffered_block);
-        BMS_DELETE_MATRIX(transposed_block);
-
-        return entropy_original / entropy_reordered;
-    }
-
-    void reorder_matrix_columns_and_compress(const std::string& MATRIX_PATH, const std::string& OUTPUT_PATH, const std::string& OUTPUT_EF_PATH, const std::string& CONFIG_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, std::size_t BLOCK_TARGET_SIZE, unsigned WLOG)
-    {
+        #ifdef KMCOMP_METRICS
         DECLARE_TIMER;
+        #endif
 
         //Get row length in bytes
         const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
@@ -432,8 +386,6 @@ namespace bms
 
         //The last block may not be full
         const std::size_t NB_BLOCKS = (NB_ROWS+BLOCK_NB_ROWS-1) / BLOCK_NB_ROWS; 
-
-        metrics["1_nb_blocks"] = NB_BLOCKS;
         
         const std::size_t FILE_SIZE = HEADER + NB_ROWS * ROW_LENGTH;
         
@@ -442,8 +394,8 @@ namespace bms
         if(last_block_size == 0)
             last_block_size = BLOCK_SIZE; //Each blocks are full, so last is full
 
-        char * buffered_block = BMS_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
-        char * transposed_block = BMS_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
+        char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
+        char * transposed_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
     
         int fd = open(MATRIX_PATH.c_str(), O_RDONLY);
 
@@ -451,58 +403,78 @@ namespace bms
         char * const mapped_file = (char* const)mmap(nullptr, FILE_SIZE, PROT_READ, MAP_PRIVATE, fd, 0);
 
         if(mapped_file == MAP_FAILED)
-            throw std::runtime_error("BMS-ERROR: mmap() failed for reordering matrix");
+            throw std::runtime_error("[ERROR] kmcomp::reorder_matrix_columns_and_compress : mmap() initialization failed for reordering matrix.");
 
         //Tell system that data will be accessed sequentially
         posix_madvise(mapped_file, FILE_SIZE, POSIX_MADV_SEQUENTIAL);
 
+        #ifdef KMCOMP_METRICS
         std::size_t time_compression = 0;
         std::size_t time_reorder = 0;
-
         START_TIMER;
-        BlockCompressorZSTD block_compressor(OUTPUT_PATH, OUTPUT_EF_PATH, CONFIG_PATH, WLOG);
+        #endif
+
+        BlockCompressorZSTD block_compressor(OUTPUT_PATH, OUTPUT_EF_PATH, CONFIG_PATH);
         block_compressor.write_header(mapped_file, HEADER);
+
+        #ifdef KMCOMP_METRICS
         END_TIMER;
         time_compression += __integral_time;
-
+        #endif
         
         std::size_t i = 0;
         //Process each blocks except the last
         for(; i + 1 < NB_BLOCKS; ++i)
         {
+            #ifdef KMCOMP_METRICS
             START_TIMER;
+            #endif
             reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, BLOCK_SIZE, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+            #ifdef KMCOMP_METRICS
             END_TIMER;
             time_reorder += __integral_time;
 
-            //Bring buffered block to compressor
             START_TIMER;
+            #endif
+
+            //Bring buffered block to compressor
             block_compressor.append_block(reinterpret_cast<std::uint8_t*>(buffered_block), BLOCK_SIZE);
+
+            #ifdef KMCOMP_METRICS
             END_TIMER;
             time_compression += __integral_time;
-
+            #endif
         }
 
-        //Handle last block that may be smaller, only block effective size differs
+        #ifdef KMCOMP_METRICS
         START_TIMER;
+        #endif
+
+        //Handle last block that may be smaller, only block effective size differs
         reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, last_block_size, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+        #ifdef KMCOMP_METRICS
         END_TIMER;
         time_reorder += __integral_time;
 
-        //Bring last block to compressor
         START_TIMER;
+        #endif
+        //Bring last block to compressor
         block_compressor.append_block(reinterpret_cast<std::uint8_t*>(buffered_block), last_block_size);
 
         //Close
         block_compressor.close();
-        END_TIMER;
-        time_compression += __integral_time;
 
+        #ifdef KMCOMP_METRICS
+        END_TIMER;
+
+        time_compression += __integral_time;
+        metrics["1_nb_blocks"] = NB_BLOCKS;
         metrics["3_time_compression(s)"] = time_compression / 1000.0;
         metrics["3_time_reorder(s)"] = time_reorder / 1000.0;
+        #endif
 
-        BMS_DELETE_MATRIX(buffered_block);
-        BMS_DELETE_MATRIX(transposed_block);
+        KMCOMP_DELETE_MATRIX(buffered_block);
+        KMCOMP_DELETE_MATRIX(transposed_block);
 
         munmap(mapped_file, FILE_SIZE);
         close(fd);

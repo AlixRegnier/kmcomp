@@ -1,4 +1,4 @@
-if(BMS_BUILD_MAIN)
+if(KMCOMP_BUILD_MAIN)
   include(FetchContent)
 
   FetchContent_Declare(cxxopts

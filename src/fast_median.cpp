@@ -1,6 +1,6 @@
 #include <fast_median.h>
 
-namespace bms
+namespace kmcomp
 {
     //https://rcoh.me/posts/linear-time-median-finding/
 

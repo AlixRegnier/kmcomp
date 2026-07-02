@@ -1,4 +1,4 @@
-# BitmatrixShuffle
+# kmcomp
 
 ## About
 
@@ -10,41 +10,57 @@ It has been designed to be highly scalable as it can deal with big matrices. It 
 
 ### Requirements  
 
-* GNU C/CPP compiler (inprogress: Clang)
-* Intel SIMD (inprogress: handling ARM instruction set)
+* Unix system
+* GNU C/CPP compiler
+* Intel CPU with AVX2 instructions
 * CMake
 
+### Compilation
+
+For a classic usage, you can build using command below. It will compile library and a CLI interface.
 ```bash
-#Direct usage
+#Standard compilation
 ./build.sh 
 ```
 
-Otherwise, you can include this project in  a CMake project by using function like FetchContent.
+### Other compilation options
+**Library only:**
+```bash
+mkdir build
+cd ./build
+cmake .. -DKMCOMP_BUILD_MAIN=false
+cd -
+```
+**Interface with metrics enabled**
+```bash
+mkdir build
+cd ./build
+cmake .. -DKMCOMP_METRICS=true
+cd -
+```
 
-## Help
-
-There is a binary that is compiled by default when using build script. It allows some operations without having to create your own main file to use the library.
-
-### Usage
+## Usage
 
 ```
-./main_bitmatrixshuffle -i <path> -c <columns> [-b <blocksize>] [--compress-to <path>] [-f <path> [-r]] [-g <groupsize>] [--header <headersize>] [-s <subsamplesize>] [-t <path>]
+./kmcomp -i <path> -c <columns> [-b <blocksize>] [-z <path> --config-path <path> [-p <level>]] [-f <path> [-r]] [-g <groupsize>] [--header <headersize>] [-s <subsamplesize>] [-t <path>]
 ```
 
-### Arguments
+## Arguments
 Shortname|Longname|Arg|Description
 --|--|--|--
 -b|--block-size|int|Targeted block size in bytes {8388608}
 -c|--columns|int|Number of columns
--z|--compress-to|str|Write out permuted and compressed matrix to path
+&nbsp;|--config-path|str|Mandatory if ``-z`` is used. Configuration path to use. If it exists, it will be loaded.
 -f|--from-order|str|Load permutation file from path
 -g|--group-size|int|Partition column reordering into groups of given size {0}
 &nbsp;|--header|int|Input matrix header size {0}
 -h|--help|-|Print help
+-i|--input|str|Input matrix file path
+-j|--json|str|Output JSON file path to store metrics (only available when compiled with ``-DKMCOMP_METRICS``)
 -n|--no-reorder|-|Ignore reordering flags, program will do nothing if ``-z`` is not used
--p|--preset|int|Require ``--compress-to``. Compression preset level [1-22] {3}
--i|--input|str|Input matrix file path.
+-p|--preset|int|Require ``-z``. Compression preset level [1-22] {3}
 -r|--reverse|-|Require ``-f``. Invert permutation (retrieve original matrix)
 -s|--subsample-size|int|Number of rows to use for distance computation {20000}
 &nbsp;|--threshold|int|Reorder only if permutation would improve compression more than given percent (%)
 -t|--to-order|str|Write out permutation file to path
+-z|--compress-to|str|Write out permuted and compressed matrix to path

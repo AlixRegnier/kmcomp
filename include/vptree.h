@@ -1,5 +1,5 @@
-#ifndef VPTREE_H
-#define VPTREE_H
+#ifndef KMCOMP_VPTREE_H
+#define KMCOMP_VPTREE_H
 
 #include <algorithm> //Sort algorithms
 #include <functional> //Function prototyping
@@ -8,9 +8,8 @@
 
 #include <fast_median.h>
 #include <rng.h>
-#include <utils.h>
 
-namespace bms 
+namespace kmcomp
 {
     template <class T>
     using DistanceFunction = std::function<double(const T&, const T&)>;

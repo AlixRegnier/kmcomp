@@ -148,7 +148,7 @@ const uint8_t lookup8bit[256] = {
 
 } // AVX2_harley_seal
 
-namespace bms {
+namespace kmcomp {
 
     //TSP path filled by both ends, less sensitive of the first chosen vertex, returns the number of computed distances
     std::size_t build_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order)

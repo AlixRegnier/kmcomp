@@ -1,10 +1,10 @@
-#ifndef FAST_MEDIAN_H
-#define FAST_MEDIAN_H
+#ifndef KMCOMP_FAST_MEDIAN_H
+#define KMCOMP_FAST_MEDIAN_H
 
 #include <vector>
 #include <algorithm>
 
-namespace bms
+namespace kmcomp
 {
     //O(n.log(n)) exact: sort & take middle value
     double nlogn_median(const std::vector<double>& distances);

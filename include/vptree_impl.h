@@ -1,9 +1,9 @@
-#ifndef VPTREE_IMPL_H
-#define VPTREE_IMPL_H
+#ifndef KMCOMP_VPTREE_IMPL_H
+#define KMCOMP_VPTREE_IMPL_H
 
 #include <vptree.h>
 
-namespace bms 
+namespace kmcomp
 {
     template <class T>
     VPTree<T>::VPTree(VPTree* parent, const std::vector<T>& vertices, const DistanceFunction<T>& distFunc)

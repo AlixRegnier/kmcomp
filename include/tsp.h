@@ -1,15 +1,13 @@
-#ifndef TSP_H
-#define TSP_H
+#ifndef KMCOMP_TSP_H
+#define KMCOMP_TSP_H
 
 #include <vptree.h>
-#include <utils.h>
 
-
-namespace bms
+namespace kmcomp
 {
     struct
     {
-        std::size_t index;
+        std::uint64_t index;
         double distance;
     } typedef IndexDistance;
 

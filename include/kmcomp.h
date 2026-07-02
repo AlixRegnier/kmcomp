@@ -1,5 +1,5 @@
-#ifndef BITMATRIXSHUFFLE_H
-#define BITMATRIXSHUFFLE_H
+#ifndef KMCOMP_KMCOMP_H
+#define KMCOMP_KMCOMP_H
 
 #include <cstring>
 #include <algorithm>
@@ -13,16 +13,15 @@
 #include <random>
 #include <vector>
 
-#include <utils.h>
 #include <tsp.h>
 #include <zstd/BlockCompressorZSTD.h>
 
-
+#ifdef KMCOMP_METRICS
 //Global JSON object for storing metrics
 #include <nlohmann/json.hpp>
 extern nlohmann::json metrics;
-
 #include <chrono>
+
 #define DECLARE_TIMER std::chrono::time_point<std::chrono::high_resolution_clock> __start_timer, __stop_timer; std::size_t __integral_time
 
 #define START_TIMER __start_timer = std::chrono::high_resolution_clock::now(); \
@@ -34,28 +33,35 @@ extern nlohmann::json metrics;
                   
 #define GET_TIMER (__integral_time / 1000.0)
 #define SHOW_TIMER std::cout << std::setprecision(3) << GET_TIMER << "s" << std::endl
+#endif
 
-#define BMS_REGRESSION_SLOPE 2.961897441
-#define BMS_REGRESSION_INTERCEPT 0.816400508
+#define KMCOMP_REGRESSION_SLOPE 2.961897441
+#define KMCOMP_REGRESSION_INTERCEPT 0.816400508
 
-namespace bms
+#define KMCOMP_ALLOCATE_MATRIX(nrows, ncols) new char[(nrows)*((ncols)/8)]
+#define KMCOMP_DELETE_MATRIX(ptr) delete[] (ptr)
+
+
+namespace kmcomp
 {
     std::size_t target_block_nb_rows(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE);
     
     std::size_t target_block_size(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE);
 
-    //Return how much the compression will be improved according to metric returned by 'compute_order_from_matrix_columns'
     
+    #ifdef KMCOMP_METRICS
     double get_entropy_ratio(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, std::size_t SAMPLED_BYTES = 8388608);
+    #endif
 
+    //Return how much the compression will be improved according to metric returned by 'compute_order_from_matrix_columns'
     constexpr double predict_metric_from_threshold(double threshold)
     {
-        return threshold * BMS_REGRESSION_SLOPE + BMS_REGRESSION_INTERCEPT;
+        return threshold * KMCOMP_REGRESSION_SLOPE + KMCOMP_REGRESSION_INTERCEPT;
     }
 
     constexpr double predict_threshold_from_metric(double metric)
     {
-        return (metric - BMS_REGRESSION_INTERCEPT) / BMS_REGRESSION_SLOPE;
+        return (metric - KMCOMP_REGRESSION_INTERCEPT) / KMCOMP_REGRESSION_SLOPE;
     }
 
     //Start multiple path TSP instances to be solved using Nearest-Neighbor, need 
@@ -65,10 +71,13 @@ namespace bms
     void reorder_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, const std::size_t BLOCK_TARGET_SIZE);
 
     //Reorder matrix columns (bit-swapping on memory-mapped file)
-    void reorder_matrix_columns_and_compress(const std::string& MATRIX_PATH, const std::string& OUTPUT_PATH, const std::string& OUTPUT_EF_PATH, const std::string& CONFIG_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, const std::size_t BLOCK_TARGET_SIZE, unsigned WLOG);
+    void reorder_matrix_columns_and_compress(const std::string& MATRIX_PATH, const std::string& OUTPUT_PATH, const std::string& OUTPUT_EF_PATH, const std::string& CONFIG_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, const std::size_t BLOCK_TARGET_SIZE);
 
     //Reorder matrix rows (row-swapping on memory-mapped file)
     void reorder_matrix_rows(char* mapped_file, const unsigned HEADER, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER);
+
+    //Reorder block
+    void reorder_block(const char * input_block, char * tmp_block, char * output_block, const std::size_t BLOCK_SIZE, const std::size_t BLOCK_NB_ROWS, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER);
 
     //Get an order that can be used to retrieve original matrix
     void reverse_order(const std::vector<std::uint64_t>& ORDER, std::vector<std::uint64_t>& reversed_order);
