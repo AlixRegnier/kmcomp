@@ -323,7 +323,6 @@ int main(int argc, char ** argv)
         metrics["1_target_blocksize(bytes)"] = target_block_size;
         #endif
 
-        if (!std::filesystem::exists(config_path))
         {
             std::ofstream config_file(config_path, std::ios::out);
             config_file << "samples = " << columns << "\n";
