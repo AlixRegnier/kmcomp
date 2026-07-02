@@ -1,5 +1,5 @@
-#ifndef VPTREE_H
-#define VPTREE_H
+#ifndef KMCOMP_VPTREE_H
+#define KMCOMP_VPTREE_H
 
 #include <algorithm> //Sort algorithms
 #include <functional> //Function prototyping
@@ -8,18 +8,11 @@
 
 #include <fast_median.h>
 #include <rng.h>
-#include <utils.h>
 
-namespace bms 
+namespace kmcomp
 {
-
     template <class T>
-    struct DistanceFunctions
-    {
-        std::function<double(T, T)> compute;
-        std::function<double(T, T)> get;
-        std::function<void(T, T, double)> store;
-    };
+    using DistanceFunction = std::function<double(const T&, const T&)>;
 
     template <class T>
     class VPTree
@@ -27,21 +20,26 @@ namespace bms
         private:
             VPTree* left = nullptr;
             VPTree* right = nullptr;
+            VPTree* parent = nullptr;
             
             bool skip = false;
             T pivot; //Vertex (or vertex identifier) that is used to split space in two parts
             double threshold; //Median of pivot distances from other vertices
-            DistanceFunctions<T>* distFunc;        
+            DistanceFunction<T> distFunc;        
         
             void init(const std::vector<T>& vertices);
+
+            VPTree(VPTree<T>*, const std::vector<T>& vertices, const DistanceFunction<T>& distFunc);
         public:
-            VPTree(const std::vector<T>& vertices, DistanceFunctions<T>* distFunc);
+            VPTree(const std::vector<T>& vertices, const DistanceFunction<T>& distFunc);
 
             ~VPTree();
 
-            static DistanceFunctions<T> bind_distance_functions(std::function<double(T, T)> computeDistFunc, std::function<double(T, T)> getDistFunc, std::function<void(T, T, double)> setDistFunc);
-
             void get_unvisited_nearest_neighbor(T query, const std::vector<bool>& alreadyAdded, double* tau, T* currentResult);
+
+            static void update(VPTree<T>* node, const std::vector<bool>& alreadyAdded);
+
+            static void map_nodes(VPTree<T>* root, std::vector<VPTree<T>*>& out_vector);
     };
 }
 

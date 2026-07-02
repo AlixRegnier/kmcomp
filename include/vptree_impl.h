@@ -1,13 +1,16 @@
-#ifndef VPTREE_IMPL_H
-#define VPTREE_IMPL_H
+#ifndef KMCOMP_VPTREE_IMPL_H
+#define KMCOMP_VPTREE_IMPL_H
 
 #include <vptree.h>
 
-namespace bms 
+namespace kmcomp
 {
     template <class T>
-    void VPTree<T>::init(const std::vector<T>& vertices)
+    VPTree<T>::VPTree(VPTree* parent, const std::vector<T>& vertices, const DistanceFunction<T>& distFunc)
     {
+        this->parent = parent;
+        this->distFunc = distFunc;
+        
         if(vertices.size() == 0)
             throw std::runtime_error("ERROR: Attempted to initialize VPTree (or one of its nodes) with no elements");
 
@@ -21,6 +24,11 @@ namespace bms
         std::size_t pivotIndex = RNG::rand_uint32_t(0, vertices.size());
         pivot = vertices[pivotIndex];
 
+        //Divide space by two
+        std::vector<T> leftVertices, rightVertices;
+        leftVertices.reserve(vertices.size()/2);
+        rightVertices.reserve(vertices.size()/2);
+
         //Distance scope
         {
             std::vector<double> distances;
@@ -29,60 +37,49 @@ namespace bms
             //Before pivot
             for(std::size_t i = 0; i < pivotIndex; ++i)
             {
-                double d = distFunc->compute(pivot, vertices[i]);
-                distFunc->store(pivot, vertices[i], d);
+                double d = this->distFunc(pivot, vertices[i]);
                 distances.push_back(d);
             }
 
             //After pivot
             for(std::size_t i = pivotIndex+1; i < vertices.size(); ++i)
             {
-                double d = distFunc->compute(pivot, vertices[i]);
-                distFunc->store(pivot, vertices[i], d);
+                double d = this->distFunc(pivot, vertices[i]);
                 distances.push_back(d);
             }
 
             //nlog(n) median but should be quick as it needs to sort small lists which size decrease
             threshold = nlogn_median(distances);
             //threshold = quickselect_median(distances);
-        }
 
-        //Divide space by two
-        std::vector<T> leftVertices, rightVertices;
-        leftVertices.reserve(vertices.size()/2);
-        rightVertices.reserve(vertices.size()/2);
+            //Before pivot
+            for(std::size_t i = 0; i < pivotIndex; ++i)
+            {
+                if(distances[i] < threshold)
+                    leftVertices.push_back(vertices[i]);
+                else
+                    rightVertices.push_back(vertices[i]);
+            }
 
-        //Before pivot
-        for(std::size_t i = 0; i < pivotIndex; ++i)
-        {
-            if(distFunc->get(pivot, vertices[i]) < threshold)
-                leftVertices.push_back(vertices[i]);
-            else
-                rightVertices.push_back(vertices[i]);
-        }
-
-        //After pivot
-        for(std::size_t i = pivotIndex+1; i < vertices.size(); ++i)
-        {
-            if(distFunc->get(pivot, vertices[i]) < threshold)
-                leftVertices.push_back(vertices[i]);
-            else
-                rightVertices.push_back(vertices[i]);
+            //After pivot
+            for(std::size_t i = pivotIndex+1; i < vertices.size(); ++i)
+            {
+                if(distances[i-1] < threshold)
+                    leftVertices.push_back(vertices[i]);
+                else
+                    rightVertices.push_back(vertices[i]);
+            }
         }
 
         if(leftVertices.size() > 0)
-            left = new VPTree(leftVertices, distFunc);
+            left = new VPTree(this, leftVertices, distFunc);
 
         if(rightVertices.size() > 0)
-            right = new VPTree(rightVertices, distFunc);
+            right = new VPTree(this, rightVertices, distFunc);
     }
 
     template <class T>
-    VPTree<T>::VPTree(const std::vector<T>& vertices, DistanceFunctions<T>* distFunc)
-    {
-        this->distFunc = distFunc;
-        init(vertices);
-    }
+    VPTree<T>::VPTree(const std::vector<T>& vertices, const DistanceFunction<T>& distFunc) : VPTree(nullptr, vertices, distFunc) {}
 
     template <class T>
     VPTree<T>::~VPTree()
@@ -97,25 +94,13 @@ namespace bms
     }
 
     template <class T>
-    DistanceFunctions<T> VPTree<T>::bind_distance_functions(std::function<double(T, T)> computeDistFunc, std::function<double(T, T)> getDistFunc, std::function<void(T, T, double)> storeDistFunc)
-    {
-        DistanceFunctions<T> df = {computeDistFunc, getDistFunc, storeDistFunc };
-        return df;
-    }
-
-    template <class T>
     void VPTree<T>::get_unvisited_nearest_neighbor(T query, const std::vector<bool>& alreadyAdded, double* tau, T* currentResult)
     {
         if(query < 0)
             throw std::runtime_error("ERROR: Can't query invalid vertex");
 
         //Check if distance already has been computed
-        double distance = distFunc->get(pivot, query);
-        if(distance == BMS_NULL_DISTANCE)
-        {
-            distance = distFunc->compute(pivot, query); //Sad we have to compute it
-            distFunc->store(pivot, query, distance); //Store it if needed later
-        }
+        double distance = distFunc(pivot, query);
 
         if(!alreadyAdded[pivot] && distance < *tau) //See if it prevents algorithm from converging (since tau is not updated), it shouldn't as there are no cycles
         {
@@ -139,9 +124,34 @@ namespace bms
             if(left != nullptr && !left->skip && (distance - *tau) <= threshold)
                 left->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult);
         }
+    }
 
-        //Node can be skipped if both children can be skipped and current pivot was already added
-        skip = (left == nullptr || left->skip) && (right == nullptr || right->skip) && alreadyAdded[pivot];
+    template <class T>
+    void VPTree<T>::update(VPTree<T>* node, const std::vector<bool>& alreadyAdded)
+    {
+        while(node != nullptr)
+        {
+            node->skip = (node->left == nullptr || node->left->skip) && (node->right == nullptr || node->right->skip) && alreadyAdded[node->pivot];
+            
+            //Stop property propagation if not masked
+            if(!node->skip)
+                return;
+
+            node = node->parent;
+        }
+    }
+
+    //Fail if vector is not big enough (should be size = n)
+    template <class T>
+    void VPTree<T>::map_nodes(VPTree<T>* node, std::vector<VPTree<T>*>& out_vector)
+    {
+        if(node == nullptr)
+            return;
+
+        out_vector[node->pivot] = node;
+
+        map_nodes(node->left, out_vector);
+        map_nodes(node->right, out_vector);
     }
 };
 

@@ -1,10 +1,10 @@
-#ifndef RNG_H
-#define RNG_H
+#ifndef KMCOMP_RNG_H
+#define KMCOMP_RNG_H
 
 #include <random>
 #include <stdexcept>
 
-namespace bms
+namespace kmcomp
 {
     class RNG
     {

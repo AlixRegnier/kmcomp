@@ -1,19 +1,21 @@
 #include <fast_median.h>
 
-namespace bms
+namespace kmcomp
 {
     //https://rcoh.me/posts/linear-time-median-finding/
 
     //Find median by sorting O(n.log(n))
     //But assumed to be O(1) for n < 5
-    double nlogn_median(std::vector<double>& distances)
+    double nlogn_median(const std::vector<double>& distances)
     {
-        std::sort(distances.begin(), distances.end());
-        if(distances.size() % 2 == 1)
-            return distances[distances.size() / 2]; //Median
+        std::vector<double> d_copy(distances);
+
+        std::sort(d_copy.begin(), d_copy.end());
+        if(d_copy.size() % 2 == 1)
+            return d_copy[d_copy.size() / 2]; //Median
 
         //Average of two medians
-        return 0.5 * (distances[distances.size() / 2 - 1] + distances[distances.size() / 2]); 
+        return 0.5 * (d_copy[d_copy.size() / 2 - 1] + d_copy[d_copy.size() / 2]); 
     }
 
     double quickselect_median(std::vector<double>& distances)
