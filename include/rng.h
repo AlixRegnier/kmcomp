@@ -3,6 +3,7 @@
 
 #include <random>
 #include <stdexcept>
+#include <cstdint>
 
 namespace kmcomp
 {

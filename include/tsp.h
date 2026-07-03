@@ -1,6 +1,7 @@
 #ifndef KMCOMP_TSP_H
 #define KMCOMP_TSP_H
 
+#include <cstdint>
 #include <vptree.h>
 
 namespace kmcomp

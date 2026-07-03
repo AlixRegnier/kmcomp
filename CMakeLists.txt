@@ -9,37 +9,42 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-include(cmake/avx.cmake)
-check_for_avx2()
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" KMCOMP_ARCH)
 
-if(NOT HAS_AVX2)
-    message(FATAL_ERROR "AVX2 support is required to compile this project.")
+if(KMCOMP_ARCH MATCHES "^(x86_64|amd64|i386|i686)$")
+    include(cmake/avx.cmake)
+    check_for_avx2()
+
+    if(NOT HAS_AVX2)
+        message(FATAL_ERROR "AVX2 support is required to compile this project on x86.")
+    else()
+        message(STATUS "AVX2 support detected.")
+    endif()
+    set(KMCOMP_SIMD_FLAGS -msse2 -mavx2)
+elseif(KMCOMP_ARCH MATCHES "^(arm64|aarch64)$")
+    message(STATUS "ARM NEON support assumed (baseline on aarch64).")
+    set(KMCOMP_SIMD_FLAGS "")
 else()
-    message(STATUS "AVX2 support detected.")
+    message(FATAL_ERROR "Unsupported architecture '${CMAKE_SYSTEM_PROCESSOR}': kmcomp requires x86 (AVX2) or ARM (NEON).")
 endif()
 
 if(KMCOMP_METRICS)
     set(KMCOMP_BUILD_MAIN true)
+    set(KMCOMP_METRICS_FLAG -DKMCOMP_METRICS)
+else()
+    set(KMCOMP_METRICS_FLAG "")
 endif()
 
 add_subdirectory(external)
 
 add_library(kmcomp_build_type_flags INTERFACE)
-if(KMCOMP_METRICS)
-    target_compile_options(kmcomp_build_type_flags INTERFACE
-    $<$<CONFIG:Debug>:-O -g -DKMCOMP_METRICS -march=native -msse2 -mavx2>
-    $<$<CONFIG:Release>:-O3 -DNDEBUG -DKMCOMP_METRICS -march=native -msse2 -mavx2>
-    $<$<CONFIG:Profile>:-O3 -ggdb3 -DNDEBUG -DKMCOMP_METRICS -fno-inline -march=native -msse2 -mavx2>
-    $<$<CONFIG:Coverage>:-O0 -g -DKMCOMP_METRICS --coverage -march=native -msse2 -mavx2>
+
+target_compile_options(kmcomp_build_type_flags INTERFACE
+    $<$<CONFIG:Debug>:-O -g -march=native ${KMCOMP_SIMD_FLAGS} ${KMCOMP_METRICS_FLAG}>
+    $<$<CONFIG:Release>:-O3 -DNDEBUG -march=native ${KMCOMP_SIMD_FLAGS} ${KMCOMP_METRICS_FLAG}>
+    $<$<CONFIG:Profile>:-O3 -ggdb3 -DNDEBUG -fno-inline -march=native ${KMCOMP_SIMD_FLAGS} ${KMCOMP_METRICS_FLAG}>
+    $<$<CONFIG:Coverage>:-O0 -g --coverage -march=native ${KMCOMP_SIMD_FLAGS} ${KMCOMP_METRICS_FLAG}>
 )
-else()
-    target_compile_options(kmcomp_build_type_flags INTERFACE
-    $<$<CONFIG:Debug>:-O -g -march=native -msse2 -mavx2>
-    $<$<CONFIG:Release>:-O3 -DNDEBUG -march=native -msse2 -mavx2>
-    $<$<CONFIG:Profile>:-O3 -ggdb3 -DNDEBUG -fno-inline -march=native -msse2 -mavx2>
-    $<$<CONFIG:Coverage>:-O0 -g --coverage -march=native -msse2 -mavx2>
-)
-endif()
 
 include_directories(
     ${PROJECT_SOURCE_DIR}/include

@@ -1,9 +1,18 @@
 #include <tsp.h>
 #include <deque>
 
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+#define KMCOMP_ARCH_X86 1
 //AVX2/SSE2
 #include <immintrin.h>
 #include <emmintrin.h>
+#elif defined(__ARM_NEON) || defined(__ARM_NEON__)
+#define KMCOMP_ARCH_NEON 1
+#include <arm_neon.h>
+#else
+#error "kmcomp requires either x86 (AVX2) or ARM (NEON) SIMD support"
+#endif
+
 
 const uint8_t lookup8bit[256] = {
     /* 0 */ 0, /* 1 */ 1, /* 2 */ 1, /* 3 */ 2,
@@ -72,8 +81,9 @@ const uint8_t lookup8bit[256] = {
     /* fc */ 6, /* fd */ 7, /* fe */ 7, /* ff */ 8
 };
 
- namespace AVX2_harley_seal 
- {
+#ifdef KMCOMP_ARCH_X86
+namespace AVX2_harley_seal
+{
     __m256i popcount(const __m256i v)
     {
         const __m256i m1 = _mm256_set1_epi8(0x55);
@@ -86,7 +96,7 @@ const uint8_t lookup8bit[256] = {
         return _mm256_sad_epu8(t3, _mm256_setzero_si256());
     }
 
-    void CSA(__m256i& h, __m256i& l, __m256i a, __m256i b, __m256i c)
+    void inline CSA(__m256i& h, __m256i& l, __m256i a, __m256i b, __m256i c)
     {
         const __m256i u = a ^ b;
         h = (a & b) | (u & c);
@@ -147,6 +157,36 @@ const uint8_t lookup8bit[256] = {
     #undef XOR_UNALIGNED
 
 } // AVX2_harley_seal
+#elif defined(KMCOMP_ARCH_NEON)
+namespace NEON_harvey_seal
+{
+    uint64_t hamming_distance_unaligned(const uint8_t* a, const uint8_t* b, const uint64_t size)
+    {
+        uint64x2_t acc = vdupq_n_u64(0);
+        uint64_t i = 0;
+
+        for (; i + 16 <= size; i += 16)
+        {
+            uint8x16_t va = vld1q_u8(a + i);
+            uint8x16_t vb = vld1q_u8(b + i);
+            uint8x16_t x = veorq_u8(va, vb);
+            uint8x16_t cnt = vcntq_u8(x);
+            uint16x8_t s16 = vpaddlq_u8(cnt);
+            uint32x4_t s32 = vpaddlq_u16(s16);
+            uint64x2_t s64 = vpaddlq_u32(s32);
+            acc = vaddq_u64(acc, s64);
+        }
+
+        uint64_t total = vgetq_lane_u64(acc, 0) + vgetq_lane_u64(acc, 1);
+
+        for (; i < size; ++i)
+            total += lookup8bit[a[i] ^ b[i]];
+
+        return total;
+    }
+} // NEON_popcount
+#endif
+
 
 namespace kmcomp {
 
@@ -243,12 +283,16 @@ namespace kmcomp {
 
     std::size_t hamming_distance(const std::uint8_t* a, const std::uint8_t* b, const std::size_t size)
     {
+#if defined(KMCOMP_ARCH_X86)
         std::size_t total = AVX2_harley_seal::hamming_distance_unaligned((const __m256i*)a, (const __m256i*)b, size / 32);
 
         for (size_t i = size - size % 32; i < size; i++)
             total += lookup8bit[a[i] ^ b[i]];
 
         return total;
+#elif defined(KMCOMP_ARCH_NEON)
+        return NEON_popcount::hamming_distance_unaligned(a, b, size);
+#endif
     }
 
     double columns_hamming_distance(const char* const transposed_matrix, const std::size_t MAX_ROW, const std::uint64_t COLUMN_A, const std::uint64_t COLUMN_B)
