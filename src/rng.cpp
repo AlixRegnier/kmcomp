@@ -5,7 +5,7 @@ namespace kmcomp
     std::uint32_t RNG::rand_uint32_t(unsigned a, unsigned b) //Generate an unsigned integer in [a ; b[
     {
         if(a >= b)
-            throw std::runtime_error("BMS-ERROR: RNG got unexpected interval");
+            throw std::runtime_error("[ERROR] kmcomp::RNG::rand_uint32_t : RNG got unexpected interval");
 
         return gen() % (b-a) + a;
     }
@@ -13,7 +13,7 @@ namespace kmcomp
     std::int32_t RNG::rand_int32_t(int a, int b) //Generate a signed integer in [a ; b[
     {
         if(a >= b)
-            throw std::runtime_error("BMS-ERROR: RNG got unexpected interval");
+            throw std::runtime_error("[ERROR] kmcomp::RNG::rand_uint32_t : RNG got unexpected interval");
         
         //Ensure generated number is positive when converted as a signed number
         return (std::int32_t)((gen() << 1) >> 1) % (b-a) + a;
