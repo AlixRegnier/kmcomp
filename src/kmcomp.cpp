@@ -2,15 +2,10 @@
 #include <cstdint>
 #include <cmath>
 
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
-#define KMCOMP_ARCH_X86 1
+#if defined(KMCOMP_USE_AVX2)
 //AVX2/SSE2
 #include <immintrin.h>
 #include <emmintrin.h>
-#elif defined(__ARM_NEON) || defined(__ARM_NEON__)
-#define KMCOMP_ARCH_NEON 1
-#else
-#error "kmcomp requires either x86 (SSE2) or ARM (NEON) SIMD support"
 #endif
 
 #define GET_ROW_PTR(x) (mapped_file+HEADER+((std::size_t)(x))*ROW_LENGTH)
@@ -18,13 +13,13 @@
 
 namespace kmcomp
 {
-    #define INP(x, y) inp[(x)*ncols/8 + (y)/8]
-    #define OUT(x, y) out[(y)*nrows/8 + (x)/8]
+#define INP(x, y) inp[(x)*ncols/8 + (y)/8]
+#define OUT(x, y) out[(y)*nrows/8 + (x)/8]
 
-    // II is defined as either (i) or (i ^ 7); i for LSB first, i^7 for MSB first
-    #define II (i^7)
+// II is defined as either (i) or (i ^ 7); i for LSB first, i^7 for MSB first
+#define II (i^7)
 
-#if defined(KMCOMP_ARCH_X86)
+#if defined(KMCOMP_USE_AVX2)
     // Code from https://mischasan.wordpress.com/2011/10/03/the-full-sse2-bit-matrix-transpose-routine/
     void __sse2_trans(std::uint8_t const *inp, std::uint8_t *out, long nrows, long ncols)
     {
@@ -79,8 +74,7 @@ namespace kmcomp
             OUT(rr, cc + II) = _mm_movemask_epi8(tmp.x);
     }
 
-#elif defined(KMCOMP_ARCH_NEON)
-
+#else
     // Portable replacement for the SSE2 routine above: no NEON "movemask"
     // equivalent exists, so instead of emulating PMOVMSKB this transposes
     // one 8x8 bit block at a time with the classic delta-swap bit trick
@@ -106,7 +100,7 @@ namespace kmcomp
     void __sse2_trans(std::uint8_t const *inp, std::uint8_t *out, long nrows, long ncols)
     {
         if(nrows % 8 != 0 || ncols % 8 != 0)
-            throw std::invalid_argument("Matrix transposition: Number of columns and of rows must be both multiple of 8.");
+            throw std::invalid_argument("[ERROR] kmcomp::__sse2_trans : Number of columns and of rows must be both multiple of 8.");
 
         const long ncols_bytes = ncols / 8;
         const long nrows_bytes = nrows / 8;
@@ -127,7 +121,7 @@ namespace kmcomp
         }
     }
 
-#endif // KMCOMP_ARCH_X86 / KMCOMP_ARCH_NEON
+#endif
 
 #undef II
 #undef OUT

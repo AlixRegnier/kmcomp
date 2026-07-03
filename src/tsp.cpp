@@ -1,16 +1,13 @@
 #include <tsp.h>
 #include <deque>
 
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
-#define KMCOMP_ARCH_X86 1
+#if defined(KMCOMP_USE_AVX2)
 //AVX2/SSE2
 #include <immintrin.h>
 #include <emmintrin.h>
 #elif defined(__ARM_NEON) || defined(__ARM_NEON__)
-#define KMCOMP_ARCH_NEON 1
+#define KMCOMP_USE_NEON 1
 #include <arm_neon.h>
-#else
-#error "kmcomp requires either x86 (AVX2) or ARM (NEON) SIMD support"
 #endif
 
 
@@ -81,7 +78,7 @@ const uint8_t lookup8bit[256] = {
     /* fc */ 6, /* fd */ 7, /* fe */ 7, /* ff */ 8
 };
 
-#ifdef KMCOMP_ARCH_X86
+#if defined(KMCOMP_USE_AVX2)
 namespace AVX2_harley_seal
 {
     __m256i popcount(const __m256i v)
@@ -157,7 +154,7 @@ namespace AVX2_harley_seal
     #undef XOR_UNALIGNED
 
 } // AVX2_harley_seal
-#elif defined(KMCOMP_ARCH_NEON)
+#elif defined(KMCOMP_USE_NEON)
 namespace NEON_harvey_seal
 {
     uint64_t hamming_distance_unaligned(const uint8_t* a, const uint8_t* b, const uint64_t size)
@@ -283,15 +280,28 @@ namespace kmcomp {
 
     std::size_t hamming_distance(const std::uint8_t* a, const std::uint8_t* b, const std::size_t size)
     {
-#if defined(KMCOMP_ARCH_X86)
+#if defined(KMCOMP_USE_AVX2)
         std::size_t total = AVX2_harley_seal::hamming_distance_unaligned((const __m256i*)a, (const __m256i*)b, size / 32);
 
-        for (size_t i = size - size % 32; i < size; i++)
+        for (std::size_t i = size - size % 32; i < size; i++)
             total += lookup8bit[a[i] ^ b[i]];
 
         return total;
-#elif defined(KMCOMP_ARCH_NEON)
+#elif defined(KMCOMP_USE_NEON)
         return NEON_popcount::hamming_distance_unaligned(a, b, size);
+#else
+        std::size_t total = 0;
+
+        const std::uint64_t * a_u64 = reinterpret_cast<const std::uint64_t*>(a);
+        const std::uint64_t * b_u64 = reinterpret_cast<const std::uint64_t*>(b);
+
+        for(std::size_t i = 0; i < size / 8; ++i)
+            total += __builtin_popcountll(a_u64[i] ^ b_u64[i]);
+
+        for (std::size_t i = size - size % 8; i < size; i++)
+            total += lookup8bit[a[i] ^ b[i]];
+
+        return total;
 #endif
     }
 
