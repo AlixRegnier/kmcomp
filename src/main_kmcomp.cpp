@@ -232,12 +232,12 @@ int main(int argc, char ** argv)
 
     const std::size_t FILE_SIZE = lseek(fd, 0, SEEK_END);
     close(fd);
-    
-    std::vector<std::size_t> order;
-    
+
+    std::vector<std::uint64_t> order;
+
     const std::size_t ROW_LENGTH = (columns + 7) / 8;
     const std::size_t NB_ROWS = (FILE_SIZE - header) / ROW_LENGTH;
-    
+
     #ifdef KMCOMP_METRICS
     metrics["0_input_path"] = input_path;
     metrics["1_nb_rows"] = NB_ROWS;
