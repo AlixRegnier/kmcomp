@@ -155,33 +155,30 @@ namespace AVX2_harley_seal
 
 } // AVX2_harley_seal
 #elif defined(KMCOMP_USE_NEON)
-namespace NEON_harvey_seal
+uint64_t hamming_distance_unaligned(const uint8_t* a, const uint8_t* b, const uint64_t size)
 {
-    uint64_t hamming_distance_unaligned(const uint8_t* a, const uint8_t* b, const uint64_t size)
+    uint64x2_t acc = vdupq_n_u64(0);
+    uint64_t i = 0;
+
+    for (; i + 16 <= size; i += 16)
     {
-        uint64x2_t acc = vdupq_n_u64(0);
-        uint64_t i = 0;
-
-        for (; i + 16 <= size; i += 16)
-        {
-            uint8x16_t va = vld1q_u8(a + i);
-            uint8x16_t vb = vld1q_u8(b + i);
-            uint8x16_t x = veorq_u8(va, vb);
-            uint8x16_t cnt = vcntq_u8(x);
-            uint16x8_t s16 = vpaddlq_u8(cnt);
-            uint32x4_t s32 = vpaddlq_u16(s16);
-            uint64x2_t s64 = vpaddlq_u32(s32);
-            acc = vaddq_u64(acc, s64);
-        }
-
-        uint64_t total = vgetq_lane_u64(acc, 0) + vgetq_lane_u64(acc, 1);
-
-        for (; i < size; ++i)
-            total += lookup8bit[a[i] ^ b[i]];
-
-        return total;
+        uint8x16_t va = vld1q_u8(a + i);
+        uint8x16_t vb = vld1q_u8(b + i);
+        uint8x16_t x = veorq_u8(va, vb);
+        uint8x16_t cnt = vcntq_u8(x);
+        uint16x8_t s16 = vpaddlq_u8(cnt);
+        uint32x4_t s32 = vpaddlq_u16(s16);
+        uint64x2_t s64 = vpaddlq_u32(s32);
+        acc = vaddq_u64(acc, s64);
     }
-} // NEON_popcount
+
+    uint64_t total = vgetq_lane_u64(acc, 0) + vgetq_lane_u64(acc, 1);
+
+    for (; i < size; ++i)
+        total += lookup8bit[a[i] ^ b[i]];
+
+    return total;
+}
 #endif
 
 
@@ -288,7 +285,7 @@ namespace kmcomp {
 
         return total;
 #elif defined(KMCOMP_USE_NEON)
-        return NEON_popcount::hamming_distance_unaligned(a, b, size);
+        return hamming_distance_unaligned(a, b, size);
 #else
         std::size_t total = 0;
 
