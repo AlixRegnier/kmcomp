@@ -149,6 +149,7 @@ int main(int argc, char ** argv)
         }
 
         if(args.count("reverse"))
+        {
             if(args.count("from-order"))
                 reverse = true;
             else
@@ -156,6 +157,7 @@ int main(int argc, char ** argv)
                 std::cerr << "[ERROR] kmcomp::main : Cannot use 'reverse' option if no order was given with '--from-order'.\n";
                 return 2;
             }
+        }
 
         if(args.count("from-order"))
         {
