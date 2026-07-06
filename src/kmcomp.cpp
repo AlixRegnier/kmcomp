@@ -3,8 +3,11 @@
 #include <cmath>
 
 #if defined(KMCOMP_USE_AVX2)
-//AVX2/SSE2
+#define KMCOMP_USE_SSE2 1
 #include <immintrin.h>
+#endif
+
+#if defined(KMCOMP_USE_SSE2)
 #include <emmintrin.h>
 #endif
 
@@ -19,7 +22,7 @@ namespace kmcomp
 // II is defined as either (i) or (i ^ 7); i for LSB first, i^7 for MSB first
 #define II (i^7)
 
-#if defined(KMCOMP_USE_AVX2)
+#if defined(KMCOMP_USE_SSE2)
     // Code from https://mischasan.wordpress.com/2011/10/03/the-full-sse2-bit-matrix-transpose-routine/
     void __sse2_trans(std::uint8_t const *inp, std::uint8_t *out, long nrows, long ncols)
     {
