@@ -1,9 +1,19 @@
 #include <tsp.h>
 #include <deque>
 
-//AVX2/SSE2
+#if defined(KMCOMP_USE_AVX2)
+#define KMCOMP_USE_SSE2 1
 #include <immintrin.h>
+#endif
+
+#if defined(KMCOMP_USE_SSE2)
 #include <emmintrin.h>
+#endif
+
+#if defined(KMCOMP_USE_NEON)
+#include <arm_neon.h>
+#endif
+
 
 const uint8_t lookup8bit[256] = {
     /* 0 */ 0, /* 1 */ 1, /* 2 */ 1, /* 3 */ 2,
@@ -72,8 +82,9 @@ const uint8_t lookup8bit[256] = {
     /* fc */ 6, /* fd */ 7, /* fe */ 7, /* ff */ 8
 };
 
- namespace AVX2_harley_seal 
- {
+#if defined(KMCOMP_USE_AVX2)
+namespace AVX2_harley_seal
+{
     __m256i popcount(const __m256i v)
     {
         const __m256i m1 = _mm256_set1_epi8(0x55);
@@ -86,7 +97,7 @@ const uint8_t lookup8bit[256] = {
         return _mm256_sad_epu8(t3, _mm256_setzero_si256());
     }
 
-    void CSA(__m256i& h, __m256i& l, __m256i a, __m256i b, __m256i c)
+    void inline CSA(__m256i& h, __m256i& l, __m256i a, __m256i b, __m256i c)
     {
         const __m256i u = a ^ b;
         h = (a & b) | (u & c);
@@ -147,6 +158,119 @@ const uint8_t lookup8bit[256] = {
     #undef XOR_UNALIGNED
 
 } // AVX2_harley_seal
+#elif defined(KMCOMP_USE_SSE2)
+namespace SSE2_harley_seal
+{
+    uint64_t inline lower_qword(const __m128i v)
+    {
+        return _mm_cvtsi128_si64(v);
+    }
+
+
+    uint64_t inline higher_qword(const __m128i v)
+    {
+        return lower_qword(_mm_srli_si128(v, 8));
+    }
+
+
+    __m128i popcount(const __m128i x)
+    {
+        const __m128i m1  = _mm_set1_epi8(0x55);
+        const __m128i m2  = _mm_set1_epi8(0x33);
+        const __m128i m4  = _mm_set1_epi8(0x0F);
+
+        const __m128i t1 = x;
+        const __m128i t2 = _mm_sub_epi8(t1, _mm_srli_epi16(t1, 1) & m1);
+        const __m128i t3 = _mm_add_epi8(t2 & m2, _mm_srli_epi16(t2, 2) & m2);
+        const __m128i t4 = _mm_add_epi8(t3, _mm_srli_epi16(t3, 4)) & m4;
+
+        return _mm_sad_epu8(t4, _mm_setzero_si128());
+    }
+
+    void CSA(__m128i& h, __m128i& l, __m128i a, __m128i b, __m128i c)
+    {
+        const __m128i u = a ^ b;
+        h = (a & b) | (u & c);
+        l = u ^ c;
+    }
+
+    #define XOR_UNALIGNED(x,y) (_mm_loadu_si128((x)) ^ _mm_loadu_si128((y)))
+    uint64_t hamming_distance_unaligned(const __m128i* a, const __m128i* b, const uint64_t size)
+    {
+        __m128i total     = _mm_setzero_si128();
+        __m128i ones      = _mm_setzero_si128();
+        __m128i twos      = _mm_setzero_si128();
+        __m128i fours     = _mm_setzero_si128();
+        __m128i eights    = _mm_setzero_si128();
+        __m128i sixteens  = _mm_setzero_si128();
+        __m128i twosA, twosB, foursA, foursB, eightsA, eightsB;
+
+        const uint64_t limit = size - size % 16;
+        uint64_t i = 0;
+
+        for(; i < limit; i += 16)
+        {
+            CSA(twosA, ones, ones, XOR_UNALIGNED(a+i+0, b+i+0), XOR_UNALIGNED(a+i+1, b+i+1));
+            CSA(twosB, ones, ones, XOR_UNALIGNED(a+i+2, b+i+2), XOR_UNALIGNED(a+i+3, b+i+3));
+            CSA(foursA, twos, twos, twosA, twosB);
+            CSA(twosA, ones, ones, XOR_UNALIGNED(a+i+4, b+i+4), XOR_UNALIGNED(a+i+5, b+i+5));
+            CSA(twosB, ones, ones, XOR_UNALIGNED(a+i+6, b+i+6), XOR_UNALIGNED(a+i+7, b+i+7));
+            CSA(foursB, twos, twos, twosA, twosB);
+            CSA(eightsA,fours, fours, foursA, foursB);
+            CSA(twosA, ones, ones, XOR_UNALIGNED(a+i+8, b+i+8), XOR_UNALIGNED(a+i+9, b+i+9));
+            CSA(twosB, ones, ones, XOR_UNALIGNED(a+i+10, b+i+10), XOR_UNALIGNED(a+i+11, b+i+11));
+            CSA(foursA, twos, twos, twosA, twosB);
+            CSA(twosA, ones, ones, XOR_UNALIGNED(a+i+12, b+i+12), XOR_UNALIGNED(a+i+13, b+i+13));
+            CSA(twosB, ones, ones, XOR_UNALIGNED(a+i+14, b+i+14), XOR_UNALIGNED(a+i+15, b+i+15));
+            CSA(foursB, twos, twos, twosA, twosB);
+            CSA(eightsB, fours, fours, foursA, foursB);
+            CSA(sixteens, eights, eights, eightsA, eightsB);
+
+            total = _mm_add_epi64(total, popcount(sixteens));
+        }
+
+
+        total = _mm_slli_epi64(total, 4);     // * 16
+        total = _mm_add_epi64(total, _mm_slli_epi64(popcount(eights), 3)); // += 8 * ...
+        total = _mm_add_epi64(total, _mm_slli_epi64(popcount(fours),  2)); // += 4 * ...
+        total = _mm_add_epi64(total, _mm_slli_epi64(popcount(twos),   1)); // += 2 * ...
+        total = _mm_add_epi64(total, popcount(ones));
+
+        for(; i < size; i++)
+            total += popcount(XOR_UNALIGNED(a+i, b+i));
+
+        return lower_qword(total) + higher_qword(total);
+    }
+    #undef XOR_UNALIGNED
+
+} // SSE_harley_seal
+#elif defined(KMCOMP_USE_NEON)
+uint64_t hamming_distance_unaligned(const uint8_t* a, const uint8_t* b, const uint64_t size)
+{
+    uint64x2_t acc = vdupq_n_u64(0);
+    uint64_t i = 0;
+
+    for (; i + 16 <= size; i += 16)
+    {
+        uint8x16_t va = vld1q_u8(a + i);
+        uint8x16_t vb = vld1q_u8(b + i);
+        uint8x16_t x = veorq_u8(va, vb);
+        uint8x16_t cnt = vcntq_u8(x);
+        uint16x8_t s16 = vpaddlq_u8(cnt);
+        uint32x4_t s32 = vpaddlq_u16(s16);
+        uint64x2_t s64 = vpaddlq_u32(s32);
+        acc = vaddq_u64(acc, s64);
+    }
+
+    uint64_t total = vgetq_lane_u64(acc, 0) + vgetq_lane_u64(acc, 1);
+
+    for (; i < size; ++i)
+        total += lookup8bit[a[i] ^ b[i]];
+
+    return total;
+}
+#endif
+
 
 namespace kmcomp {
 
@@ -243,12 +367,36 @@ namespace kmcomp {
 
     std::size_t hamming_distance(const std::uint8_t* a, const std::uint8_t* b, const std::size_t size)
     {
+#if defined(KMCOMP_USE_AVX2)
         std::size_t total = AVX2_harley_seal::hamming_distance_unaligned((const __m256i*)a, (const __m256i*)b, size / 32);
 
-        for (size_t i = size - size % 32; i < size; i++)
+        for (std::size_t i = size - size % 32; i < size; i++)
             total += lookup8bit[a[i] ^ b[i]];
 
         return total;
+#elif defined(KMCOMP_USE_SSE2)
+        std::size_t total = SSE2_harley_seal::hamming_distance_unaligned((const __m128i*)a, (const __m128i*)b, size / 16);
+
+        for (std::size_t i = size - size % 16; i < size; i++)
+            total += lookup8bit[a[i] ^ b[i]];
+
+        return total;
+#elif defined(KMCOMP_USE_NEON)
+        return hamming_distance_unaligned(a, b, size);
+#else
+        std::size_t total = 0;
+
+        const std::uint64_t * a_u64 = reinterpret_cast<const std::uint64_t*>(a);
+        const std::uint64_t * b_u64 = reinterpret_cast<const std::uint64_t*>(b);
+
+        for(std::size_t i = 0; i < size / 8; ++i)
+            total += __builtin_popcountll(a_u64[i] ^ b_u64[i]);
+
+        for (std::size_t i = size - size % 8; i < size; i++)
+            total += lookup8bit[a[i] ^ b[i]];
+
+        return total;
+#endif
     }
 
     double columns_hamming_distance(const char* const transposed_matrix, const std::size_t MAX_ROW, const std::uint64_t COLUMN_A, const std::uint64_t COLUMN_B)

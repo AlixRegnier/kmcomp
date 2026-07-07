@@ -1,23 +1,29 @@
 #include <kmcomp.h>
-
-//AVX2/SSE2
-#include <immintrin.h>
-#include <emmintrin.h>
-#include <stdint.h>
+#include <cstdint>
 #include <cmath>
+
+#if defined(KMCOMP_USE_AVX2)
+#define KMCOMP_USE_SSE2 1
+#include <immintrin.h>
+#endif
+
+#if defined(KMCOMP_USE_SSE2)
+#include <emmintrin.h>
+#endif
 
 #define GET_ROW_PTR(x) (mapped_file+HEADER+((std::size_t)(x))*ROW_LENGTH)
 #define GET_BLOCK_PTR(x) (mapped_file+HEADER+((std::size_t)(x))*BLOCK_SIZE)
 
 namespace kmcomp
 {
+#define INP(x, y) inp[(x)*ncols/8 + (y)/8]
+#define OUT(x, y) out[(y)*nrows/8 + (x)/8]
+
+// II is defined as either (i) or (i ^ 7); i for LSB first, i^7 for MSB first
+#define II (i^7)
+
+#if defined(KMCOMP_USE_SSE2)
     // Code from https://mischasan.wordpress.com/2011/10/03/the-full-sse2-bit-matrix-transpose-routine/
-    #define INP(x, y) inp[(x)*ncols/8 + (y)/8]
-    #define OUT(x, y) out[(y)*nrows/8 + (x)/8]
-
-    // II is defined as either (i) or (i ^ 7); i for LSB first, i^7 for MSB first
-    #define II (i^7) 
-
     void __sse2_trans(std::uint8_t const *inp, std::uint8_t *out, long nrows, long ncols)
     {
         ssize_t rr, cc, i, h;
@@ -29,7 +35,7 @@ namespace kmcomp
 
         if(nrows % 8 != 0 || ncols % 8 != 0)
             throw std::invalid_argument("[ERROR] kmcomp::__sse2_trans : Number of columns and of rows must be both multiple of 8.");
-    
+
         // Do the main body in 16x8 blocks:
         for ( rr = 0; rr + 16 <= nrows; rr += 16 )
         {
@@ -41,11 +47,11 @@ namespace kmcomp
                     *(std::uint16_t *) &OUT(rr, cc + II) = _mm_movemask_epi8(tmp.x);
             }
         }
-    
+
         if ( nrows % 16 == 0 )
             return;
         rr = nrows - nrows % 16;
-    
+
         // The remainder is a block of 8x(16n+8) bits (n may be 0).
         //  Do a PAIR of 8x8 blocks in each step:
         for ( cc = 0; cc + 16 <= ncols; cc += 16 )
@@ -63,7 +69,7 @@ namespace kmcomp
         }
         if ( cc == ncols )
             return;
-    
+
         //  Do the remaining 8x8 block:
         for ( i = 0; i < 8; ++i )
             tmp.b[i] = INP(rr + II, cc);
@@ -71,9 +77,58 @@ namespace kmcomp
             OUT(rr, cc + II) = _mm_movemask_epi8(tmp.x);
     }
 
-    #undef II
-    #undef OUT
-    #undef INP
+#else
+    // Portable replacement for the SSE2 routine above: no NEON "movemask"
+    // equivalent exists, so instead of emulating PMOVMSKB this transposes
+    // one 8x8 bit block at a time with the classic delta-swap bit trick
+    // (same algorithm family as a 64x64 word transpose, just at 8-bit
+    // granularity -- no architecture-specific intrinsics needed at all).
+    static void __kmcomp_transpose8x8(std::uint8_t* a)
+    {
+        int j = 4;
+        std::uint8_t m = 0x0F;
+        while (j != 0)
+        {
+            for (int k = 0; k < 8; k = ((k | j) + 1) & ~j)
+            {
+                std::uint8_t t = static_cast<std::uint8_t>((a[k] ^ (a[k | j] >> j)) & m);
+                a[k] = static_cast<std::uint8_t>(a[k] ^ t);
+                a[k | j] = static_cast<std::uint8_t>(a[k | j] ^ (t << j));
+            }
+            j >>= 1;
+            m = static_cast<std::uint8_t>(m ^ (m << j));
+        }
+    }
+
+    void __sse2_trans(std::uint8_t const *inp, std::uint8_t *out, long nrows, long ncols)
+    {
+        if(nrows % 8 != 0 || ncols % 8 != 0)
+            throw std::invalid_argument("[ERROR] kmcomp::__sse2_trans : Number of columns and of rows must be both multiple of 8.");
+
+        const long ncols_bytes = ncols / 8;
+        const long nrows_bytes = nrows / 8;
+
+        for (long br = 0; br < nrows / 8; ++br)
+        {
+            for (long bc = 0; bc < ncols_bytes; ++bc)
+            {
+                std::uint8_t block[8];
+                for (int r = 0; r < 8; ++r)
+                    block[r] = INP(br * 8 + r, bc * 8);
+
+                __kmcomp_transpose8x8(block);
+
+                for (int r = 0; r < 8; ++r)
+                    OUT(br * 8, bc * 8 + r) = block[r];
+            }
+        }
+    }
+
+#endif
+
+#undef II
+#undef OUT
+#undef INP
     
     std::size_t target_block_nb_rows(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE)
     {
