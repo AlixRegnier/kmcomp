@@ -35,21 +35,20 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build build-essential
+          sudo apt-get install -y cmake build-essential
  
       - name: Install build tools (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install cmake ninja
+          brew install cmake
  
-      - name: Configure
-        run: >
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DKMCOMP_METRICS=ON
- 
-      - name: Build
-        run: make -C build -j
+      - name: Configure and build
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DKMCOMP_BUILD_MAIN=true -DKMCOMP_METRICS=false
+          make -j
+          cd -
  
       - name: Show linked shared libraries
         run: |
