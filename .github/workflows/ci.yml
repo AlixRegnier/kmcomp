@@ -1,0 +1,67 @@
+name: CI
+ 
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+ 
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux x86_64
+          - os: ubuntu-24.04-arm
+            name: Linux arm64
+          - os: macos-13
+            name: macOS x86_64 (Intel)
+          - os: macos-latest
+            name: macOS arm64 (Apple Silicon)
+ 
+    steps:
+      - name: Checkout kmcomp
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+ 
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build build-essential
+ 
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake ninja
+ 
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+ 
+      - name: Build
+        run: cmake --build build --config Release -j
+ 
+      - name: Show linked shared libraries
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            otool -L ./build/kmcomp
+          else
+            ldd ./build/kmcomp
+          fi
+ 
+      - name: Run binary
+        run: ./build/kmcomp --help
+ 
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kmcomp-${{ matrix.os }}
+          path: build/kmcomp
