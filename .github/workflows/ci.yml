@@ -49,7 +49,7 @@ jobs:
           -DKMCOMP_METRICS=ON
  
       - name: Build
-        run: make -j
+        run: make -C build -j
  
       - name: Show linked shared libraries
         run: |
