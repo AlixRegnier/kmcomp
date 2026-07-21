@@ -31,21 +31,21 @@ extern nlohmann::json metrics;
 #define END_TIMER __stop_timer = std::chrono::high_resolution_clock::now(); \
                   __integral_time = static_cast<std::size_t>(std::chrono::duration_cast<std::chrono::milliseconds>(__stop_timer - __start_timer).count())
 
-                  
+
 #define GET_TIMER (__integral_time / 1000.0)
 #define SHOW_TIMER std::cout << std::setprecision(3) << GET_TIMER << "s" << std::endl
 
-#define BMS_REGRESSION_SLOPE 2.961897441
-#define BMS_REGRESSION_INTERCEPT 0.816400508
+#define BMS_REGRESSION_SLOPE 0.413619691
+#define BMS_REGRESSION_INTERCEPT 0.596332685
 
 namespace bms
 {
     std::size_t target_block_nb_rows(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE);
-    
+
     std::size_t target_block_size(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE);
 
     //Return how much the compression will be improved according to metric returned by 'compute_order_from_matrix_columns'
-    
+
     double get_entropy_ratio(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, std::size_t SAMPLED_BYTES = 8388608);
 
     constexpr double predict_metric_from_threshold(double threshold)
@@ -58,7 +58,7 @@ namespace bms
         return (metric - BMS_REGRESSION_INTERCEPT) / BMS_REGRESSION_SLOPE;
     }
 
-    //Start multiple path TSP instances to be solved using Nearest-Neighbor, need 
+    //Start multiple path TSP instances to be solved using Nearest-Neighbor, need
     double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::size_t GROUPSIZE, const std::size_t SUBSAMPLED_ROWS, std::vector<std::uint64_t>& order);
 
     //Reorder matrix columns (bit-swapping on memory-mapped file)
@@ -72,6 +72,6 @@ namespace bms
 
     //Get an order that can be used to retrieve original matrix
     void reverse_order(const std::vector<std::uint64_t>& ORDER, std::vector<std::uint64_t>& reversed_order);
-};   
+};
 
 #endif

@@ -262,7 +262,7 @@ int main(int argc, char ** argv)
             std::cout << "Warning: Subsampled rows (" << subsampled_rows << ") exceeds row count (" << NB_ROWS << "). Clamping to " << NB_ROWS << " rows." << std::endl;
             subsampled_rows = NB_ROWS;
         }
-        
+
         START_TIMER;
         double metric = bms::compute_order_from_matrix_columns(input_path, header, columns, NB_ROWS, groupsize, subsampled_rows, order);
         END_TIMER;
@@ -274,7 +274,7 @@ int main(int argc, char ** argv)
         metrics["3_time_permutation(s)"] = GET_TIMER;
 
         double predicted_metric = bms::predict_metric_from_threshold(threshold);
-        
+
         //If default threshold and reordering would decrease compressibility, override linear regression and don't reorder
         if(user_threshold && metric < predicted_metric)
         {
@@ -318,7 +318,7 @@ int main(int argc, char ** argv)
 
             metrics["3_time_compression(s)"] = GET_TIMER;
         }
-        else 
+        else
         {
             //Reorder and compress matrix
             bms::reorder_matrix_columns_and_compress(input_path, output_path, output_ef_path, config_path, header, columns, NB_ROWS, order, target_block_size, wlog);
@@ -334,7 +334,6 @@ int main(int argc, char ** argv)
         metrics["3_time_reorder(s)"] = GET_TIMER;
     }
 
-            
     //Serialize order
     if(serialize_order)
     {
