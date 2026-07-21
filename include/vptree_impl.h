@@ -107,23 +107,23 @@ namespace bms
 
         if(distance < threshold)
         {
-            if(left != nullptr && !left->skip && (distance - *tau) <= threshold)
+            if(left != nullptr && /*!left->skip &&*/ (distance - *tau) <= threshold)
                 left->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult);
 
-            if(right != nullptr && !right->skip && (distance + *tau) >= threshold)
+            if(right != nullptr && /*!right->skip &&*/ (distance + *tau) >= threshold)
                 right->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult);
         }
         else
         {
-            if(right != nullptr && !right->skip && (distance + *tau) >= threshold)
+            if(right != nullptr && /*!right->skip &&*/ (distance + *tau) >= threshold)
                 right->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult);
 
-            if(left != nullptr && !left->skip && (distance - *tau) <= threshold)
+            if(left != nullptr && /*!left->skip &&*/ (distance - *tau) <= threshold)
                 left->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult);
         }
 
         //Node can be skipped if both children can be skipped and current pivot was already added
-        skip = (left == nullptr || left->skip) && (right == nullptr || right->skip) && alreadyAdded[pivot];
+        //skip = (left == nullptr || left->skip) && (right == nullptr || right->skip) && alreadyAdded[pivot];
     }
 };
 
