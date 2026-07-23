@@ -35,7 +35,7 @@ namespace kmcomp
 
             ~VPTree();
 
-            void get_unvisited_nearest_neighbor(T query, const std::vector<bool>& alreadyAdded, double* tau, T* currentResult);
+            void get_unvisited_nearest_neighbor(T query, const std::vector<bool>& alreadyAdded, double* tau, T* currentResult, double error_factor = 0.0);
 
             static void update(VPTree<T>* node, const std::vector<bool>& alreadyAdded);
 

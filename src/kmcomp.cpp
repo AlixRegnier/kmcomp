@@ -146,7 +146,7 @@ namespace kmcomp
         return ROW_LENGTH * target_block_nb_rows(NB_COLS, BLOCK_TARGET_SIZE); 
     }
   
-    double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, std::size_t groupsize, std::size_t subsampled_rows, std::vector<std::uint64_t>& order)
+    double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, std::size_t groupsize, std::size_t subsampled_rows, std::vector<std::uint64_t>& order, double error_factor)
     {
         #ifdef KMCOMP_METRICS
         DECLARE_TIMER;
@@ -203,7 +203,7 @@ namespace kmcomp
         for(std::size_t i = 0; i + 1 < NB_GROUPS; ++i)
         {
             //Find a suboptimal path minimizing the weight of edges and visiting each node once
-            computed_distances += build_double_ended_NN(transposed_matrix, groupsize, subsampled_rows, offset, order);
+            computed_distances += build_double_ended_NN(transposed_matrix, groupsize, subsampled_rows, offset, order, error_factor);
             
             for(std::size_t j = 0; j + 1 < groupsize; ++j)
             {
@@ -214,7 +214,7 @@ namespace kmcomp
             offset += groupsize;
         }
 
-        computed_distances += build_double_ended_NN(transposed_matrix, last_group_size, subsampled_rows, offset, order);
+        computed_distances += build_double_ended_NN(transposed_matrix, last_group_size, subsampled_rows, offset, order, error_factor);
 
         for(std::size_t j = 0; j + 1 < last_group_size; ++j)
         {

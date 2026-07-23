@@ -275,7 +275,7 @@ uint64_t hamming_distance_unaligned(const uint8_t* a, const uint8_t* b, const ui
 namespace kmcomp {
 
     //TSP path filled by both ends, less sensitive of the first chosen vertex, returns the number of computed distances
-    std::size_t build_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order)
+    std::size_t build_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order, double error_factor)
     {
         //Pick a random first vertex
         std::uint64_t firstVertex = RNG::rand_uint32_t(0, COLUMNS);
@@ -356,7 +356,7 @@ namespace kmcomp {
         return counter;
     }
 
-    IndexDistance find_closest_vertex(VPTree<std::uint64_t>& VPTREE, const std::uint64_t VERTEX, const std::vector<bool>& ALREADY_ADDED)
+    IndexDistance find_closest_vertex(VPTree<std::uint64_t>& VPTREE, const std::uint64_t VERTEX, const std::vector<bool>& ALREADY_ADDED, double error_factor)
     {
         IndexDistance nn = { 0, 2.0 };
 

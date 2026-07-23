@@ -34,6 +34,7 @@ int main(int argc, char ** argv)
     unsigned preset_level = 3;
 
     double threshold = 0.0;
+    double error_factor = 0.0;
     std::size_t groupsize = 0;
     std::size_t subsampled_rows = 10000;
     std::size_t columns;
@@ -54,6 +55,7 @@ int main(int argc, char ** argv)
             ("b,block-size", "Targeted block size in bytes {8388608}.", cxxopts::value<std::size_t>())
             ("c,columns", "Number of columns.", cxxopts::value<std::size_t>())
             ("z,compress-to", "Write out permuted and compressed matrix to path.", cxxopts::value<std::string>())
+            ("e,error-nn", "Approximate nearest-neighbor [0.0-1.0] {0.0}.", cxxopts::value<double>())
             ("f,from-order", "Load permutation file from path.", cxxopts::value<std::string>())
             ("g,group-size", "Partition column reordering into groups of given size {%columns%}.", cxxopts::value<std::size_t>())
             ("header", "Input matrix header size {0}.", cxxopts::value<unsigned>())
@@ -210,6 +212,17 @@ int main(int argc, char ** argv)
             user_threshold = true;
             threshold = args["threshold"].as<short>() / 100.0;
         }
+
+        if(args.count("error-nn"))
+        {
+            error_factor = args["error-nn"].as<double>();
+
+            if(error_factor < 0.0 || error_factor > 1.0)
+            {
+                std::cerr << "[ERROR] kmcomp::main : Option -e/--error-nn is out of range [0.0-1.0], got: '" << error_factor << "'.\n";
+                return 2;
+            }
+        }
     } 
     catch (const cxxopts::exceptions::exception& e)
     {
@@ -282,7 +295,7 @@ int main(int argc, char ** argv)
         #ifdef KMCOMP_METRICS
         START_TIMER;
         #endif
-        double metric = kmcomp::compute_order_from_matrix_columns(input_path, header, columns, NB_ROWS, groupsize, subsampled_rows, order);
+        double metric = kmcomp::compute_order_from_matrix_columns(input_path, header, columns, NB_ROWS, groupsize, subsampled_rows, order, error_factor);
         #ifdef KMCOMP_METRICS
         END_TIMER;
         #endif

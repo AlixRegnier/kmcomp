@@ -12,7 +12,7 @@ namespace kmcomp
         this->distFunc = distFunc;
         
         if(vertices.size() == 0)
-            throw std::runtime_error("ERROR: Attempted to initialize VPTree (or one of its nodes) with no elements");
+            throw std::runtime_error("[ERROR] kmcomp::VPTree::VPTree : Attempted to initialize VPTree (or one of its nodes) with no elements");
 
         if(vertices.size() == 1)
         {
@@ -94,15 +94,12 @@ namespace kmcomp
     }
 
     template <class T>
-    void VPTree<T>::get_unvisited_nearest_neighbor(T query, const std::vector<bool>& alreadyAdded, double* tau, T* currentResult)
+    void VPTree<T>::get_unvisited_nearest_neighbor(T query, const std::vector<bool>& alreadyAdded, double* tau, T* currentResult, double error_factor)
     {
-        if(query < 0)
-            throw std::runtime_error("ERROR: Can't query invalid vertex");
-
         //Check if distance already has been computed
         double distance = distFunc(pivot, query);
 
-        if(!alreadyAdded[pivot] && distance < *tau) //See if it prevents algorithm from converging (since tau is not updated), it shouldn't as there are no cycles
+        if(!alreadyAdded[pivot] && distance < *tau)
         {
             *tau = distance;
             *currentResult = pivot;
@@ -111,18 +108,22 @@ namespace kmcomp
         if(distance < threshold)
         {
             if(left != nullptr && !left->skip && (distance - *tau) <= threshold)
-                left->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult);
+                left->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult, error_factor);
 
-            if(right != nullptr && !right->skip && (distance + *tau) >= threshold)
-                right->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult);
+            double relaxedTau = *tau / (1.0 + error_factor);
+
+            if(right != nullptr && !right->skip && (distance + relaxedTau) >= threshold)
+                right->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult, error_factor);
         }
         else
         {
             if(right != nullptr && !right->skip && (distance + *tau) >= threshold)
-                right->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult);
+                right->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult, error_factor);
 
-            if(left != nullptr && !left->skip && (distance - *tau) <= threshold)
-                left->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult);
+            double relaxedTau = *tau / (1.0 + error_factor);
+
+            if(left != nullptr && !left->skip && (distance - relaxedTau) <= threshold)
+                left->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult, error_factor);
         }
     }
 
