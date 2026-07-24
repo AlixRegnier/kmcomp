@@ -258,6 +258,7 @@ int main(int argc, char ** argv)
     metrics["1_nb_rows"] = NB_ROWS;
     metrics["1_nb_cols"] = ROW_LENGTH*8;
     metrics["1_groupsize"] = groupsize == 0 ? ROW_LENGTH*8 : (groupsize + 7) / 8 * 8;
+    metrics["1_error_nn"] = error_factor;
     metrics["0_user_permutation"] = deserialize_order;
     metrics["0_invert_permutation"] = reverse;
     metrics["0_is_compressed"] = compress;

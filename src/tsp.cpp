@@ -310,7 +310,7 @@ namespace kmcomp {
         VPTree<std::uint64_t>::update(nodes_map[firstVertex], alreadyAdded);
 
         //Find second vertex
-        IndexDistance second = find_closest_vertex(root, firstVertex, alreadyAdded);
+        IndexDistance second = find_closest_vertex(root, firstVertex, alreadyAdded, error_factor);
         
         //Added second vertex to data structures
         orderDeque.push_back(second.index);
@@ -318,8 +318,8 @@ namespace kmcomp {
         VPTree<std::uint64_t>::update(nodes_map[second.index], alreadyAdded);
 
         //Find closest vertices from path front and back
-        IndexDistance a = find_closest_vertex(root, orderDeque.front(), alreadyAdded);
-        IndexDistance b = find_closest_vertex(root, orderDeque.back(), alreadyAdded);
+        IndexDistance a = find_closest_vertex(root, orderDeque.front(), alreadyAdded, error_factor);
+        IndexDistance b = find_closest_vertex(root, orderDeque.back(), alreadyAdded, error_factor);
 
         //Find next vertices to add by checking which is the minimum to take
         for(std::size_t i = 2; i < COLUMNS; ++i)
@@ -331,9 +331,9 @@ namespace kmcomp {
                 VPTree<std::uint64_t>::update(nodes_map[a.index], alreadyAdded);
 
                 if(a.index == b.index)
-                    b = find_closest_vertex(root, orderDeque.back(), alreadyAdded);
+                    b = find_closest_vertex(root, orderDeque.back(), alreadyAdded, error_factor);
 
-                a = find_closest_vertex(root, orderDeque.front(), alreadyAdded);
+                a = find_closest_vertex(root, orderDeque.front(), alreadyAdded, error_factor);
             }
             else
             {
@@ -343,9 +343,9 @@ namespace kmcomp {
                 VPTree<std::uint64_t>::update(nodes_map[b.index], alreadyAdded);
 
                 if(b.index == a.index)
-                    a = find_closest_vertex(root, orderDeque.front(), alreadyAdded);
+                    a = find_closest_vertex(root, orderDeque.front(), alreadyAdded, error_factor);
 
-                b = find_closest_vertex(root, orderDeque.back(), alreadyAdded);
+                b = find_closest_vertex(root, orderDeque.back(), alreadyAdded, error_factor);
             }
         }
 
@@ -360,7 +360,7 @@ namespace kmcomp {
     {
         IndexDistance nn = { 0, 2.0 };
 
-        VPTREE.get_unvisited_nearest_neighbor(VERTEX, ALREADY_ADDED, &nn.distance, &nn.index);
+        VPTREE.get_unvisited_nearest_neighbor(VERTEX, ALREADY_ADDED, &nn.distance, &nn.index, error_factor);
 
         return nn;
     }

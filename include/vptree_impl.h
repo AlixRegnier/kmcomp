@@ -96,7 +96,6 @@ namespace kmcomp
     template <class T>
     void VPTree<T>::get_unvisited_nearest_neighbor(T query, const std::vector<bool>& alreadyAdded, double* tau, T* currentResult, double error_factor)
     {
-        //Check if distance already has been computed
         double distance = distFunc(pivot, query);
 
         if(!alreadyAdded[pivot] && distance < *tau)
@@ -105,22 +104,24 @@ namespace kmcomp
             *currentResult = pivot;
         }
 
+        double relaxedTau = *tau / (1.0 + error_factor);
+
         if(distance < threshold)
         {
-            if(left != nullptr && !left->skip && (distance - *tau) <= threshold)
+            if(left != nullptr && !left->skip && (distance - relaxedTau) <= threshold)
                 left->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult, error_factor);
 
-            double relaxedTau = *tau / (1.0 + error_factor);
+            relaxedTau = *tau / (1.0 + error_factor);
 
             if(right != nullptr && !right->skip && (distance + relaxedTau) >= threshold)
                 right->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult, error_factor);
         }
         else
         {
-            if(right != nullptr && !right->skip && (distance + *tau) >= threshold)
+            if(right != nullptr && !right->skip && (distance + relaxedTau) >= threshold)
                 right->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult, error_factor);
 
-            double relaxedTau = *tau / (1.0 + error_factor);
+            relaxedTau = *tau / (1.0 + error_factor);
 
             if(left != nullptr && !left->skip && (distance - relaxedTau) <= threshold)
                 left->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult, error_factor);
