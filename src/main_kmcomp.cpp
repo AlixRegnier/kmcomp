@@ -55,7 +55,7 @@ int main(int argc, char ** argv)
             ("b,block-size", "Targeted block size in bytes {8388608}.", cxxopts::value<std::size_t>())
             ("c,columns", "Number of columns.", cxxopts::value<std::size_t>())
             ("z,compress-to", "Write out permuted and compressed matrix to path.", cxxopts::value<std::string>())
-            ("e,error-nn", "Approximate nearest-neighbor [0.0-1.0] {0.0}.", cxxopts::value<double>())
+            ("e,error-nn", "Approximate nearest-neighbor [0.0-inf[ {0.0}.", cxxopts::value<double>())
             ("f,from-order", "Load permutation file from path.", cxxopts::value<std::string>())
             ("g,group-size", "Partition column reordering into groups of given size {%columns%}.", cxxopts::value<std::size_t>())
             ("header", "Input matrix header size {0}.", cxxopts::value<unsigned>())
@@ -217,9 +217,9 @@ int main(int argc, char ** argv)
         {
             error_factor = args["error-nn"].as<double>();
 
-            if(error_factor < 0.0 || error_factor > 1.0)
+            if(error_factor < 0.0)
             {
-                std::cerr << "[ERROR] kmcomp::main : Option -e/--error-nn is out of range [0.0-1.0], got: '" << error_factor << "'.\n";
+                std::cerr << "[ERROR] kmcomp::main : Option -e/--error-nn is out of range [0.0-inf[, got: '" << error_factor << "'.\n";
                 return 2;
             }
         }

@@ -11,6 +11,12 @@
 
 namespace kmcomp
 {
+    struct
+    {
+        std::uint64_t index;
+        double distance;
+    } typedef IndexDistance;
+
     template <class T>
     using DistanceFunction = std::function<double(const T&, const T&)>;
 
@@ -35,10 +41,11 @@ namespace kmcomp
 
             ~VPTree();
 
-            void get_unvisited_nearest_neighbor(T query, const std::vector<bool>& alreadyAdded, double* tau, T* currentResult, double error_factor = 0.0);
+            void get_unvisited_nearest_neighbor(T query, const std::vector<bool>& alreadyAdded, double* tau, T* currentResult, double error_factor = 0.0) const;
+
+            IndexDistance get_leftmost_unvisited(T query, const std::vector<bool>& alreadyAdded) const;
 
             static void update(VPTree<T>* node, const std::vector<bool>& alreadyAdded);
-
             static void map_nodes(VPTree<T>* root, std::vector<VPTree<T>*>& out_vector);
     };
 }
