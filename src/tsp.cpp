@@ -1,5 +1,6 @@
 #include <tsp.h>
 #include <deque>
+#include <float.h>
 
 #if defined(KMCOMP_USE_AVX2)
 #define KMCOMP_USE_SSE2 1
@@ -274,6 +275,26 @@ uint64_t hamming_distance_unaligned(const uint8_t* a, const uint8_t* b, const ui
 
 namespace kmcomp {
 
+
+    bool check_order(const std::vector<std::uint64_t>& ORDER, const std::size_t COLUMNS)
+    {
+        std::vector<bool> a(COLUMNS);
+
+        for(std::size_t i = 0; i < COLUMNS; ++i)
+        {
+            if(a[ORDER[i]])
+                throw std::runtime_error("A vertex is attempted to be added twice to path.");
+
+            a[ORDER[i]] = true;
+        }
+
+        for(std::size_t i = 0; i < COLUMNS; ++i)
+            if(!a[ORDER[i]])
+                throw std::runtime_error("A vertex was never added to path.");
+
+        return true;
+    }
+
     //TSP path filled by both ends, less sensitive of the first chosen vertex, returns the number of computed distances
     std::size_t build_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order, double error_factor)
     {
@@ -322,7 +343,8 @@ namespace kmcomp {
         IndexDistance b = find_closest_vertex(root, orderDeque.back(), alreadyAdded, error_factor);
 
         //Find next vertices to add by checking which is the minimum to take
-        for(std::size_t i = 2; i < COLUMNS; ++i)
+        //Start at 3, two were handled before loop, last is handled after
+        for(std::size_t i = 3; i < COLUMNS; ++i)
         {
             if(a.distance < b.distance)
             {
@@ -349,16 +371,23 @@ namespace kmcomp {
             }
         }
 
+        if(a.distance < b.distance)
+            orderDeque.push_front(a.index);
+        else
+            orderDeque.push_back(b.index);
+
         //Store global order
         for(std::size_t i = 0; i < COLUMNS; ++i)
             order[i+OFFSET] = orderDeque[i] + OFFSET; //Add offset because columns are addressed by their global location
         
+        check_order(order, COLUMNS);
+
         return counter;
     }
 
     IndexDistance find_closest_vertex(VPTree<std::uint64_t>& VPTREE, const std::uint64_t VERTEX, const std::vector<bool>& ALREADY_ADDED, double error_factor)
     {
-        IndexDistance nn = { 0, 2.0 };
+        IndexDistance nn = { ~std::uint64_t{0}, 2.0 };
 
         VPTREE.get_unvisited_nearest_neighbor(VERTEX, ALREADY_ADDED, &nn.distance, &nn.index, error_factor);
 

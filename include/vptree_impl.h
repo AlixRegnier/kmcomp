@@ -134,7 +134,7 @@ namespace kmcomp
         while(node != nullptr)
         {
             node->skip = (node->left == nullptr || node->left->skip) && (node->right == nullptr || node->right->skip) && alreadyAdded[node->pivot];
-            
+
             //Stop property propagation if not masked
             if(!node->skip)
                 return;
