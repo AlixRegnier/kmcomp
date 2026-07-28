@@ -11,18 +11,11 @@
 
 namespace kmcomp
 {
-    struct
-    {
-        std::uint64_t index;
-        double distance;
-    } typedef IndexDistance;
-
-    template <class T>
-    using DistanceFunction = std::function<double(const T&, const T&)>;
-
     template <class T>
     class VPTree
     {
+        using DistanceFunction = std::function<double(const T&, const T&)>;
+
         private:
             VPTree* left = nullptr;
             VPTree* right = nullptr;
@@ -31,19 +24,18 @@ namespace kmcomp
             bool skip = false;
             T pivot; //Vertex (or vertex identifier) that is used to split space in two parts
             double threshold; //Median of pivot distances from other vertices
-            DistanceFunction<T> distFunc;        
+
+            DistanceFunction distFunc;
         
             void init(const std::vector<T>& vertices);
 
-            VPTree(VPTree<T>*, const std::vector<T>& vertices, const DistanceFunction<T>& distFunc);
+            VPTree(VPTree<T>* parent, const std::vector<T>& vertices, const DistanceFunction& distFunc);
         public:
-            VPTree(const std::vector<T>& vertices, const DistanceFunction<T>& distFunc);
+            VPTree(const std::vector<T>& vertices, const DistanceFunction& distFunc);
 
             ~VPTree();
 
             void get_unvisited_nearest_neighbor(T query, const std::vector<bool>& alreadyAdded, double* tau, T* currentResult, double error_factor = 0.0) const;
-
-            IndexDistance get_leftmost_unvisited(T query, const std::vector<bool>& alreadyAdded) const;
 
             static void update(VPTree<T>* node, const std::vector<bool>& alreadyAdded);
             static void map_nodes(VPTree<T>* root, std::vector<VPTree<T>*>& out_vector);

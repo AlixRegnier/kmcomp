@@ -6,7 +6,7 @@
 namespace kmcomp
 {
     template <class T>
-    VPTree<T>::VPTree(VPTree* parent, const std::vector<T>& vertices, const DistanceFunction<T>& distFunc)
+    VPTree<T>::VPTree(VPTree* parent, const std::vector<T>& vertices, const DistanceFunction& distFunc)
     {
         this->parent = parent;
         this->distFunc = distFunc;
@@ -79,7 +79,7 @@ namespace kmcomp
     }
 
     template <class T>
-    VPTree<T>::VPTree(const std::vector<T>& vertices, const DistanceFunction<T>& distFunc) : VPTree(nullptr, vertices, distFunc) {}
+    VPTree<T>::VPTree(const std::vector<T>& vertices, const DistanceFunction& distFunc) : VPTree(nullptr, vertices, distFunc) {}
 
     template <class T>
     VPTree<T>::~VPTree()
@@ -126,21 +126,6 @@ namespace kmcomp
             if(left != nullptr && !left->skip && (distance - relaxedTau) <= threshold)
                 left->get_unvisited_nearest_neighbor(query, alreadyAdded, tau, currentResult, error_factor);
         }
-    }
-
-    template <class T>
-    IndexDistance VPTree<T>::get_leftmost_unvisited(T query, const std::vector<bool>& alreadyAdded) const
-    {
-        if(!alreadyAdded[pivot])
-            return { pivot, distFunc(pivot, query) };
-
-        if(left != nullptr && !left->skip)
-            return left->get_leftmost_unvisited(query, alreadyAdded);
-
-        if(right != nullptr && !right->skip)
-            return right->get_leftmost_unvisited(query, alreadyAdded);
-
-        throw std::runtime_error("[ERROR] kmcomp::VPTree::get_leftmost_unvisited : no more unvisited vertices");
     }
 
     template <class T>
