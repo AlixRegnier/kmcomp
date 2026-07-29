@@ -318,7 +318,6 @@ namespace kmcomp {
             vertices.pop_back();
 
             //update other data structures
-            orderDeque.push_back(x);
             alreadyAdded[x] = true;
             VPTree<std::uint64_t>::update(nodes_map[x], alreadyAdded);
         };
@@ -334,9 +333,12 @@ namespace kmcomp {
         {
             std::uint64_t firstVertex = RNG::rand_uint32_t(0, COLUMNS);
             set_as_visited(firstVertex);
+            orderDeque.push_back(firstVertex);
 
             //Add second vertex to path
-            set_as_visited(find_next_unvisited_vertex(firstVertex).index);
+            std::uint64_t secondVertex = find_next_unvisited_vertex(firstVertex).index;
+            set_as_visited(secondVertex);
+            orderDeque.push_back(secondVertex);
         }
 
         //Find closest vertices from path front and back
@@ -350,6 +352,7 @@ namespace kmcomp {
             if(a.distance < b.distance)
             {
                 set_as_visited(a.index);
+                orderDeque.push_front(a.index);
 
                 if(a.index == b.index)
                     b = find_next_unvisited_vertex(orderDeque.back());
@@ -359,6 +362,7 @@ namespace kmcomp {
             else
             {
                 set_as_visited(b.index);
+                orderDeque.push_back(b.index);
 
                 if(b.index == a.index)
                     a = find_next_unvisited_vertex(orderDeque.front());
