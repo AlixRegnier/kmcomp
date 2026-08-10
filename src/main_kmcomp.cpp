@@ -14,9 +14,9 @@ nlohmann::json metrics;
 void usage()
 {
     #ifdef KMCOMP_METRICS
-    std::cout << "Usage: kmcomp -i <path> -c <columns> [-b <blocksize>] [--compress-to <path> --config-path <path> [-p <level>]] [-f <path> [-r]] [-g <groupsize>] [--header <headersize>] [-j <path>] [-n] [-s <subsamplesize>] [--threshold] [-t <path>]\n\n-b, --block-size\t<int>\tTargeted block size in bytes {8388608}.\n-c, --columns\t\t<int>\tNumber of columns.\n-z, --compress-to\t\t<str>\tWrite out permuted and compressed matrix to path.\n-f, --from-order\t<str>\tLoad permutation file from path.\n-g, --group-size\t<int>\tPartition column reordering into groups of given size {%columns%}.\n--header\t\t<int>\tInput matrix header size {0}.\n-h, --help\t\t\tPrint help.\n-i, --input\t\t<str>\tInput matrix file path.\n-j, --json\t\t<str>\tStore metrics in JSON file.\n-n, --no-reorder\t\tIgnore reordering flags, program will do nothing if '-z' is not used.\n-p, --preset\t\t<int>\tRequire '--compress-to'. Zstd preset level [1-22] {3}.\n-r, --reverse\t\t\tRequire '-f'. Invert permutation (retrieve original matrix).\n-s, --subsample-size\t<int>\tNumber of rows to use for distance computation {20000}.\n--threshold\t\t<int>\tReorder only if permutation would improve compression more than given percent (%).\n-t, --to-order\t\t<str>\tWrite out permutation file to path.\n\n";
+    std::cout << "Usage: kmcomp -i <path> -c <columns> [-b <blocksize>] [--compress-to <path> --config-path <path> [-p <level>]] [-e <epsilon>] [-f <path> [-r]] [-g <groupsize>] [--header <headersize>] [-j <path>] [-n] [-s <subsamplesize>] [--threshold] [-t <path>]\n\n-b, --block-size\t<int>\tTargeted block size in bytes {8388608}.\n-c, --columns\t\t<int>\tNumber of columns.\n-z, --compress-to\t\t<str>\tWrite out permuted and compressed matrix to path.\n-f, --from-order\t<str>\tLoad permutation file from path.\n-g, --group-size\t<int>\tPartition column reordering into groups of given size {%columns%}.\n--header\t\t<int>\tInput matrix header size {0}.\n-h, --help\t\t\tPrint help.\n-i, --input\t\t<str>\tInput matrix file path.\n-j, --json\t\t<str>\tStore metrics in JSON file.\n-n, --no-reorder\t\tIgnore reordering flags, program will do nothing if '-z' is not used.\n-p, --preset\t\t<int>\tRequire '--compress-to'. Zstd preset level [1-22] {3}.\n-r, --reverse\t\t\tRequire '-f'. Invert permutation (retrieve original matrix).\n-s, --subsample-size\t<int>\tNumber of rows to use for distance computation {10000}.\n--threshold\t\t<int>\tReorder only if permutation would improve compression more than given percent (%).\n-t, --to-order\t\t<str>\tWrite out permutation file to path.\n\n";
     #else
-    std::cout << "Usage: kmcomp -i <path> -c <columns> [-b <blocksize>] [--compress-to <path> --config-path <path> [-p <level>]] [-f <path> [-r]] [-g <groupsize>] [--header <headersize>] [-j <path>] [-n] [-s <subsamplesize>] [--threshold] [-t <path>]\n\n-b, --block-size\t<int>\tTargeted block size in bytes {8388608}.\n-c, --columns\t\t<int>\tNumber of columns.\n-z, --compress-to\t\t<str>\tWrite out permuted and compressed matrix to path.\n-f, --from-order\t<str>\tLoad permutation file from path.\n-g, --group-size\t<int>\tPartition column reordering into groups of given size {%columns%}.\n--header\t\t<int>\tInput matrix header size {0}.\n-h, --help\t\t\tPrint help.\n-i, --input\t\t<str>\tInput matrix file path.\n-j, --json\t\t<str>\tDisabled, for enabling this option see README.\n-n, --no-reorder\t\tIgnore reordering flags, program will do nothing if '-z' is not used.\n-p, --preset\t\t<int>\tRequire '--compress-to'. Zstd preset level [1-22] {3}.\n-r, --reverse\t\t\tRequire '-f'. Invert permutation (retrieve original matrix).\n-s, --subsample-size\t<int>\tNumber of rows to use for distance computation {20000}.\n--threshold\t\t<int>\tReorder only if permutation would improve compression more than given percent (%).\n-t, --to-order\t\t<str>\tWrite out permutation file to path.\n\n";
+    std::cout << "Usage: kmcomp -i <path> -c <columns> [-b <blocksize>] [--compress-to <path> --config-path <path> [-p <level>]] [-e <epsilon>] [-f <path> [-r]] [-g <groupsize>] [--header <headersize>] [-j <path>] [-n] [-s <subsamplesize>] [--threshold] [-t <path>]\n\n-b, --block-size\t<int>\tTargeted block size in bytes {8388608}.\n-c, --columns\t\t<int>\tNumber of columns.\n-z, --compress-to\t\t<str>\tWrite out permuted and compressed matrix to path.\n-f, --from-order\t<str>\tLoad permutation file from path.\n-g, --group-size\t<int>\tPartition column reordering into groups of given size {%columns%}.\n--header\t\t<int>\tInput matrix header size {0}.\n-h, --help\t\t\tPrint help.\n-i, --input\t\t<str>\tInput matrix file path.\n-j, --json\t\t<str>\tDisabled, for enabling this option see README.\n-n, --no-reorder\t\tIgnore reordering flags, program will do nothing if '-z' is not used.\n-p, --preset\t\t<int>\tRequire '--compress-to'. Zstd preset level [1-22] {3}.\n-r, --reverse\t\t\tRequire '-f'. Invert permutation (retrieve original matrix).\n-s, --subsample-size\t<int>\tNumber of rows to use for distance computation {10000}.\n--threshold\t\t<int>\tReorder only if permutation would improve compression more than given percent (%).\n-t, --to-order\t\t<str>\tWrite out permutation file to path.\n\n";
     #endif
 }
 
@@ -55,7 +55,7 @@ int main(int argc, char ** argv)
             ("b,block-size", "Targeted block size in bytes {8388608}.", cxxopts::value<std::size_t>())
             ("c,columns", "Number of columns.", cxxopts::value<std::size_t>())
             ("z,compress-to", "Write out permuted and compressed matrix to path.", cxxopts::value<std::string>())
-            ("e,error-nn", "Approximate nearest-neighbor [0.0-inf[ {0.0}.", cxxopts::value<double>())
+            ("e,epsilon", "Approximate nearest-neighbor [0.0-inf[ {0.0}. See README.", cxxopts::value<double>())
             ("f,from-order", "Load permutation file from path.", cxxopts::value<std::string>())
             ("g,group-size", "Partition column reordering into groups of given size {%columns%}.", cxxopts::value<std::size_t>())
             ("header", "Input matrix header size {0}.", cxxopts::value<unsigned>())
@@ -64,7 +64,7 @@ int main(int argc, char ** argv)
             ("n,no-reorder", "No reorder")
             ("p,preset", "Require '--compress-to'. Compression preset level [1-22] {3}.", cxxopts::value<unsigned>())
             ("r,reverse", "Require '-f'. Invert permutation (retrieve original matrix).")
-            ("s,subsample-size", "Number of rows to use for distance computation {20000}.", cxxopts::value<std::size_t>())
+            ("s,subsample-size", "Number of rows to use for distance computation {10000}.", cxxopts::value<std::size_t>())
             ("threshold", "Reorder only if permutation would improve compression more than given percent (%).", cxxopts::value<short>())
             ("t,to-order", "Write out permutation file to path.", cxxopts::value<std::string>())
             ("config-path", "Mandatory if '-z' is used. Configuration path to used. If it exists, it will be loaded.", cxxopts::value<std::string>());
@@ -213,9 +213,9 @@ int main(int argc, char ** argv)
             threshold = args["threshold"].as<short>() / 100.0;
         }
 
-        if(args.count("error-nn"))
+        if(args.count("epsilon"))
         {
-            error_factor = args["error-nn"].as<double>();
+            error_factor = args["epsilon"].as<double>();
 
             if(error_factor < 0.0)
             {
@@ -258,7 +258,7 @@ int main(int argc, char ** argv)
     metrics["1_nb_rows"] = NB_ROWS;
     metrics["1_nb_cols"] = ROW_LENGTH*8;
     metrics["1_groupsize"] = groupsize == 0 ? ROW_LENGTH*8 : (groupsize + 7) / 8 * 8;
-    metrics["1_error_nn"] = error_factor;
+    metrics["1_error_factor"] = error_factor;
     metrics["0_user_permutation"] = deserialize_order;
     metrics["0_invert_permutation"] = reverse;
     metrics["0_is_compressed"] = compress;
