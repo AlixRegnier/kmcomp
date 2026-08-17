@@ -1,7 +1,8 @@
 #include <tsp.h>
+#include <vptree.hpp>
+
 #include <deque>
 #include <float.h>
-
 #if defined(KMCOMP_USE_AVX2)
 #define KMCOMP_USE_SSE2 1
 #include <immintrin.h>
@@ -272,78 +273,58 @@ uint64_t hamming_distance_unaligned(const uint8_t* a, const uint8_t* b, const ui
 }
 #endif
 
+#include <stdexcept>
 
 namespace kmcomp {
 
     //TSP path filled by both ends, less sensitive of the first chosen vertex, returns the number of computed distances
+    #ifdef KMCOMP_METRICS
     std::size_t build_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order, double error_factor)
+    #else
+    void build_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order, double error_factor)
+    #endif
     {
-        //Vector of added vertices (set true for the first vertex)
-        std::vector<bool> alreadyAdded;
-        alreadyAdded.resize(COLUMNS);
-        
         //Deque for building path with first vertex as starting point
         std::deque<std::uint64_t> orderDeque;
+        orderDeque.resize(COLUMNS);
 
-        //Build vector of vertices for VPTree and positions for swap-and-pop
-        std::vector<std::uint64_t> vertices, positions;
+        //Build vector of vertices for VPTree
+        std::vector<std::uint64_t> vertices;
         vertices.resize(COLUMNS);
-        positions.resize(COLUMNS);
 
         for(std::size_t i = 0; i < vertices.size(); ++i)
-        {
             vertices[i] = i;
-            positions[i] = i;
-        }
 
         //Computed distances counter
+        
+        //Construct metric tree
+        #ifdef KMCOMP_METRICS
         std::size_t counter = 0;
-
-        auto distance_function = [=, &counter](std::uint64_t a, std::uint64_t b) -> double {
+        vptree::VPTree<std::uint64_t> metric_tree(vertices.begin(), vertices.end(), [=, &counter](std::uint64_t a, std::uint64_t b) -> double {
             ++counter;
             return columns_hamming_distance(MATRIX, SUBSAMPLED_ROWS, a+OFFSET, b+OFFSET);
-        };
-
-        VPTree<std::uint64_t> root(vertices, distance_function);
-
-        //Map VPTree nodes in a vector
-        std::vector<VPTree<std::uint64_t>*> nodes_map;
-        nodes_map.resize(COLUMNS);
-        VPTree<std::uint64_t>::map_nodes(&root, nodes_map);
-
-        auto set_as_visited = [&](std::uint64_t x){
-            //swap-and-pop
-            vertices[positions[x]] = vertices.back();
-            positions[vertices.back()] = positions[x];
-            vertices.pop_back();
-
-            //update other data structures
-            alreadyAdded[x] = true;
-            VPTree<std::uint64_t>::update(nodes_map[x], alreadyAdded);
-        };
-
-        auto find_next_unvisited_vertex = [&](std::uint64_t query) -> IndexDistance {
-            IndexDistance result = { vertices[0], distance_function(query, vertices[0])};
-            root.get_unvisited_nearest_neighbor(query, alreadyAdded, &result.distance, &result.index, error_factor);
-
-            return result;
-        };
+        });
+        #else
+        vptree::VPTree<std::uint64_t> metric_tree(vertices.begin(), vertices.end(), [=](std::uint64_t a, std::uint64_t b) -> double {
+            return columns_hamming_distance(MATRIX, SUBSAMPLED_ROWS, a+OFFSET, b+OFFSET);
+        });
+        #endif
 
         //Pick a random first vertex
         {
-            std::uint64_t firstVertex = RNG::rand_uint32_t(0, COLUMNS);
-            set_as_visited(firstVertex);
-            orderDeque.push_back(firstVertex);
+            vptree::vertex_t first_vertex = metric_tree.get_random_unvisited_vertex();
+            metric_tree.set_vertex_as_visited(first_vertex);
+            orderDeque.push_back(static_cast<std::uint64_t>(first_vertex));
 
             //Add second vertex to path
-            std::uint64_t secondVertex = find_next_unvisited_vertex(firstVertex).index;
-            set_as_visited(secondVertex);
-            orderDeque.push_back(secondVertex);
+            vptree::vertex_t second_vertex = metric_tree.get_nearest_unvisited_neighbor(first_vertex).vertex;
+            metric_tree.set_vertex_as_visited(second_vertex);
+            orderDeque.push_back(static_cast<std::uint64_t>(second_vertex));
         }
 
         //Find closest vertices from path front and back
-        IndexDistance a = find_next_unvisited_vertex(orderDeque.front());
-        IndexDistance b = find_next_unvisited_vertex(orderDeque.back());
+        vptree::nn_t<std::uint64_t> a = metric_tree.get_nearest_unvisited_neighbor(orderDeque.front());
+        vptree::nn_t<std::uint64_t> b = metric_tree.get_nearest_unvisited_neighbor(orderDeque.back());
 
         //Find next vertices to add by checking which is the minimum to take
         //Start at 3, two were handled before loop, last is handled after
@@ -351,36 +332,38 @@ namespace kmcomp {
         {
             if(a.distance < b.distance)
             {
-                set_as_visited(a.index);
-                orderDeque.push_front(a.index);
+                metric_tree.set_vertex_as_visited(a.vertex);
+                orderDeque.push_front(a.vertex);
 
-                if(a.index == b.index)
-                    b = find_next_unvisited_vertex(orderDeque.back());
+                if(a.vertex == b.vertex)
+                    b = metric_tree.get_nearest_unvisited_neighbor(orderDeque.back());
 
-                a = find_next_unvisited_vertex(orderDeque.front());
+                a = metric_tree.get_nearest_unvisited_neighbor(orderDeque.front());
             }
             else
             {
-                set_as_visited(b.index);
-                orderDeque.push_back(b.index);
+                metric_tree.set_vertex_as_visited(b.vertex);
+                orderDeque.push_back(b.vertex);
 
-                if(b.index == a.index)
-                    a = find_next_unvisited_vertex(orderDeque.front());
+                if(b.vertex == a.vertex)
+                    a = metric_tree.get_nearest_unvisited_neighbor(orderDeque.front());
 
-                b = find_next_unvisited_vertex(orderDeque.back());
+                b = metric_tree.get_nearest_unvisited_neighbor(orderDeque.back());
             }
         }
 
         if(a.distance < b.distance)
-            orderDeque.push_front(a.index);
+            orderDeque.push_front(static_cast<std::uint64_t>(a.vertex));
         else
-            orderDeque.push_back(b.index);
+            orderDeque.push_back(static_cast<std::uint64_t>(b.vertex));
 
         //Store global order
         for(std::size_t i = 0; i < COLUMNS; ++i)
             order[i+OFFSET] = orderDeque[i] + OFFSET; //Add offset because columns are addressed by their global location
 
+        #ifdef KMCOMP_METRICS
         return counter;
+        #endif
     }
 
     std::size_t hamming_distance(const std::uint8_t* a, const std::uint8_t* b, const std::size_t size)

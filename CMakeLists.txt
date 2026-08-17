@@ -64,18 +64,17 @@ set(KMCOMP_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 
 add_library(kmcomp)
 target_sources(kmcomp PRIVATE
-    ${KMCOMP_SRC_DIR}/fast_median.cpp
     ${KMCOMP_SRC_DIR}/rng.cpp
     ${KMCOMP_SRC_DIR}/kmcomp.cpp
     ${KMCOMP_SRC_DIR}/tsp.cpp
 )
 
-target_link_libraries(kmcomp PRIVATE kmcomp_build_type_flags sdsl-lite zstd_ext block_compressor_ext)
+target_link_libraries(kmcomp PRIVATE kmcomp_build_type_flags sdsl-lite zstd_ext block_compressor_ext vptree_ext)
 target_include_directories(kmcomp PUBLIC
     $<BUILD_INTERFACE:${KMCOMP_INCLUDE_DIR}>
     $<INSTALL_INTERFACE:include>
 )
-add_dependencies(kmcomp block_compressor_ext)
+add_dependencies(kmcomp block_compressor_ext vptree_ext)
 
 if(KMCOMP_METRICS)
     target_link_libraries(kmcomp PRIVATE json_ext)

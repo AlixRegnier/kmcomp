@@ -148,11 +148,6 @@ namespace kmcomp
   
     double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, std::size_t groupsize, std::size_t subsampled_rows, std::vector<std::uint64_t>& order, double error_factor)
     {
-        #ifdef KMCOMP_METRICS
-        DECLARE_TIMER;
-        START_TIMER;
-        #endif
-
         int fd = open(MATRIX_PATH.c_str(), O_RDONLY); 
         if(fd < 0)
             throw std::runtime_error("[ERROR] kmcomp::compute_order_from_matrix_columns : Failed to open a file descriptor on reference matrix.");
@@ -163,7 +158,7 @@ namespace kmcomp
         order.resize(ROW_LENGTH * 8);
 
         const char * const mapped_file = (const char * const)mmap(nullptr, FILE_SIZE, PROT_READ, MAP_PRIVATE, fd, 0);
-        
+
         subsampled_rows = subsampled_rows / 8 * 8;
         if(subsampled_rows == 0)
             subsampled_rows = NB_ROWS / 8 * 8;
@@ -173,7 +168,7 @@ namespace kmcomp
 
         if(subsampled_rows % 8 != 0)
             throw std::invalid_argument("[ERROR] kmcomp::compute_order_from_matrix_columns : Number of subsampled rows is not a multiple of 8. Maybe your matrix has less than 8 rows ?");
-       
+
         if(groupsize % 8 != 0)
             throw std::invalid_argument("[ERROR] kmcomp::compute_order_from_matrix_columns : The size of a group of columns must be a multiple of 8 (for transposition).");
 
@@ -184,7 +179,7 @@ namespace kmcomp
         __sse2_trans(reinterpret_cast<const std::uint8_t*>(mapped_file+HEADER), reinterpret_cast<std::uint8_t*>(transposed_matrix), subsampled_rows, ROW_LENGTH*8);
 
         std::size_t last_group_size;
-        
+
         //Number of group of columns
         const std::size_t NB_GROUPS = (ROW_LENGTH*8+groupsize-1)/groupsize;
 
@@ -196,15 +191,22 @@ namespace kmcomp
         std::size_t offset = 0; //Offset for global order assignation
 
 
+        #if KMCOMP_METRICS
         std::size_t computed_distances = 0;
+        #endif
+        
         double original_consecutive_distances_sum = 0.0;
         double new_consecutive_distances_sum = 0.0;
-        
+
         for(std::size_t i = 0; i + 1 < NB_GROUPS; ++i)
         {
             //Find a suboptimal path minimizing the weight of edges and visiting each node once
+            #ifdef KMCOMP_METRICS
             computed_distances += build_double_ended_NN(transposed_matrix, groupsize, subsampled_rows, offset, order, error_factor);
-            
+            #else
+            build_double_ended_NN(transposed_matrix, groupsize, subsampled_rows, offset, order, error_factor);
+            #endif
+
             for(std::size_t j = 0; j + 1 < groupsize; ++j)
             {
                 original_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, j+offset, j+1+offset);
@@ -214,18 +216,24 @@ namespace kmcomp
             offset += groupsize;
         }
 
+        #ifdef KMCOMP_METRICS
+        DECLARE_TIMER;
+        START_TIMER;
         computed_distances += build_double_ended_NN(transposed_matrix, last_group_size, subsampled_rows, offset, order, error_factor);
+        #else
+        build_double_ended_NN(transposed_matrix, last_group_size, subsampled_rows, offset, order, error_factor);
+        #endif
 
         for(std::size_t j = 0; j + 1 < last_group_size; ++j)
         {
             original_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, j+offset, j+1+offset);;
             new_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, order[j+offset], order[j+1+offset]);
         }
-        
+
         #ifdef KMCOMP_METRICS
         END_TIMER;
         metrics["3_time_permutation(s)"] = GET_TIMER; 
-        
+
         std::size_t max_computable_distances = (groupsize * (groupsize - 1) / 2) * (NB_GROUPS - 1) + last_group_size * (last_group_size - 1) / 2;
         metrics["2a_computed_distances"] = computed_distances;
         metrics["2a_max_computable_distances"] = max_computable_distances;
@@ -359,10 +367,10 @@ namespace kmcomp
 
         //Transpose matrix block
         __sse2_trans(reinterpret_cast<const std::uint8_t*>(output_block), reinterpret_cast<std::uint8_t*>(tmp_block), BLOCK_NB_ROWS, ROW_LENGTH*8);
-        
+
         //Reorder block columns (by reordering transposed block rows)
         reorder_matrix_rows(tmp_block, 0, BLOCK_NB_ROWS/8, ORDER);
-        
+
         //Transpose matrix block back
         __sse2_trans(reinterpret_cast<const std::uint8_t*>(tmp_block), reinterpret_cast<std::uint8_t*>(output_block), ROW_LENGTH*8, BLOCK_NB_ROWS);
     }
@@ -380,7 +388,7 @@ namespace kmcomp
 
         //The last block may not be full
         const std::size_t NB_BLOCKS = (NB_ROWS+BLOCK_NB_ROWS-1) / BLOCK_NB_ROWS; 
-        
+
         //Overshoot allows to consider last block as full and to apply operations, overshooted rows won't be written 
         const std::size_t FILE_SIZE = HEADER + NB_ROWS * ROW_LENGTH;
 
@@ -391,7 +399,7 @@ namespace kmcomp
 
         char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
         char * transposed_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
-    
+
         int fd = open(MATRIX_PATH.c_str(), O_RDWR);
         char * mapped_file = (char*)mmap(nullptr, FILE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
@@ -406,7 +414,7 @@ namespace kmcomp
         {
             //Reorder block
             reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, BLOCK_SIZE, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
-            
+
             //Copy block from memory to disk
             std::memcpy(GET_BLOCK_PTR(i), buffered_block, BLOCK_SIZE);
         }
@@ -441,9 +449,9 @@ namespace kmcomp
 
         //The last block may not be full
         const std::size_t NB_BLOCKS = (NB_ROWS+BLOCK_NB_ROWS-1) / BLOCK_NB_ROWS; 
-        
+
         const std::size_t FILE_SIZE = HEADER + NB_ROWS * ROW_LENGTH;
-        
+
         //Compute last block size
         std::size_t last_block_size = (NB_ROWS % BLOCK_NB_ROWS) * ROW_LENGTH;
         if(last_block_size == 0)
@@ -451,7 +459,7 @@ namespace kmcomp
 
         char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
         char * transposed_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
-    
+
         int fd = open(MATRIX_PATH.c_str(), O_RDONLY);
 
         //Since no modifications will be applied to original matrix, open it with MAP_PRIVATE mode
@@ -476,7 +484,7 @@ namespace kmcomp
         END_TIMER;
         time_compression += __integral_time;
         #endif
-        
+
         std::size_t i = 0;
         //Process each blocks except the last
         for(; i + 1 < NB_BLOCKS; ++i)
