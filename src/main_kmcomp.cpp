@@ -248,7 +248,7 @@ int main(int argc, char ** argv)
     const std::size_t FILE_SIZE = lseek(fd, 0, SEEK_END);
     close(fd);
 
-    std::vector<std::uint64_t> order;
+    std::vector<std::uint64_t> order_col;
 
     const std::size_t ROW_LENGTH = (columns + 7) / 8;
     const std::size_t NB_ROWS = (FILE_SIZE - header) / ROW_LENGTH;
@@ -273,7 +273,7 @@ int main(int argc, char ** argv)
     //Compute order (or deserialize if given)
     if(deserialize_order)
     {
-        order.resize(ROW_LENGTH*8);
+        order_col.resize(ROW_LENGTH*8);
         fd = open(in_order_path.c_str(), O_RDONLY);
 
         if(fd < 0)
@@ -282,7 +282,7 @@ int main(int argc, char ** argv)
             return 2;
         }
 
-        read(fd, reinterpret_cast<char*>(order.data()), order.size()*sizeof(std::uint64_t));
+        read(fd, reinterpret_cast<char*>(order_col.data()), order_col.size()*sizeof(std::uint64_t));
         close(fd);
     }
     else if(!no_reorder) //If reorder enabled and no order was given, compute it
@@ -292,25 +292,35 @@ int main(int argc, char ** argv)
             std::cerr << "[WARNING] main : Subsampled rows (" << subsampled_rows << ") exceeds row count (" << NB_ROWS << "). Clamping to " << NB_ROWS << " rows.\n";
             subsampled_rows = NB_ROWS;
         }
-        
-        #ifdef KMCOMP_METRICS
-        START_TIMER;
-        #endif
-        double metric = kmcomp::compute_order_from_matrix_columns(input_path, header, columns, NB_ROWS, groupsize, subsampled_rows, order, error_factor);
-        #ifdef KMCOMP_METRICS
-        END_TIMER;
-        #endif
+
+        std::vector<std::uint64_t> order_row;
+
+        double metric_col = kmcomp::compute_order_from_matrix_columns(input_path, header, columns, NB_ROWS, groupsize, subsampled_rows, order_col, 0.0);
+
+        double metric_row = kmcomp::compute_order_from_matrix_rows(input_path, header, columns, NB_ROWS, groupsize, 0, order_row, error_factor);
+
+        {
+            int fd_row = open("order_row.bin", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+
+            if(fd_row < 0)
+            {
+                std::cerr << "Error: Couldn't serialize row order, open syscall failed\n";
+                return 2;
+            }
+
+            write(fd_row, reinterpret_cast<char*>(order_row.data()), order_row.size()*sizeof(std::uint64_t));
+            close(fd_row);
+        }
 
         #ifdef KMCOMP_METRICS
-        double entropy_ratio = kmcomp::get_entropy_ratio(input_path, header, columns, NB_ROWS, order);
+        double entropy_ratio = kmcomp::get_entropy_ratio(input_path, header, columns, NB_ROWS, order_col);
         metrics["2b_entropy_ratio"] = entropy_ratio;
-        metrics["3_time_permutation(s)"] = GET_TIMER;
         #endif
         
         double predicted_metric = kmcomp::predict_metric_from_threshold(threshold);
 
         //If default threshold and reordering would decrease compressibility, override linear regression and don't reorder
-        if(user_threshold && metric < predicted_metric)
+        if(user_threshold && metric_col < predicted_metric)
         {
             #ifdef KMCOMP_METRICS
             metrics["2b_metric_interpolated_threshold"] = predicted_metric;
@@ -327,8 +337,8 @@ int main(int argc, char ** argv)
     //Compute reversed order
     if(reverse)
     {
-        std::vector<std::uint64_t> order_tmp(order);
-        kmcomp::reverse_order(order_tmp, order);
+        std::vector<std::uint64_t> order_tmp(order_col);
+        kmcomp::reverse_order(order_tmp, order_col);
     }
 
     if(compress)
@@ -361,7 +371,7 @@ int main(int argc, char ** argv)
         else 
         {
             //Reorder and compress matrix
-            kmcomp::reorder_matrix_columns_and_compress(input_path, output_path, output_ef_path, config_path, header, columns, NB_ROWS, order, target_block_size);
+            kmcomp::reorder_matrix_columns_and_compress(input_path, output_path, output_ef_path, config_path, header, columns, NB_ROWS, order_col, target_block_size);
         }
     }
     else if(!no_reorder)
@@ -370,7 +380,7 @@ int main(int argc, char ** argv)
         START_TIMER;
         #endif
         //Reorder matrix
-        kmcomp::reorder_matrix_columns(input_path, header, columns, NB_ROWS, order, target_block_size);
+        kmcomp::reorder_matrix_columns(input_path, header, columns, NB_ROWS, order_col, target_block_size);
 
         #ifdef KMCOMP_METRICS
         END_TIMER;
@@ -389,7 +399,7 @@ int main(int argc, char ** argv)
             return 2;
         }
 
-        write(fd, reinterpret_cast<char*>(order.data()), order.size()*sizeof(std::uint64_t));
+        write(fd, reinterpret_cast<char*>(order_col.data()), order_col.size()*sizeof(std::uint64_t));
         close(fd);
     }
 

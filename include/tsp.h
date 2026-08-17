@@ -8,12 +8,11 @@
 namespace kmcomp
 {
     //Build a path by iteratively add closest vertex (compare closest from tail and closest from head), less sensitive to the first chosen vertex
-    #ifdef KMCOMP_METRICS
-    std::size_t build_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order, double error_factor = 0.0);
-    #else
-    void build_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order, double error_factor = 0.0);
-    #endif
-    
+    std::size_t build_cols_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order, double error_factor = 0.0);
+
+    //Build a path by iteratively add closest vertex (compare closest from tail and closest from head), less sensitive to the first chosen vertex
+    std::size_t build_rows_double_ended_NN(const char* const MATRIX, const std::size_t HEADER, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order, double error_factor = 0.0);
+
     //Distance computation between two columns
     double columns_hamming_distance(const char* const MATRIX, const std::size_t NB_ROWS, const std::uint64_t COLUMN_A, const std::uint64_t COLUMN_B);
 

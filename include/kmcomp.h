@@ -28,10 +28,10 @@ extern nlohmann::json metrics;
                     std::cout << std::flush
 
 #define END_TIMER __stop_timer = std::chrono::high_resolution_clock::now(); \
-                  __integral_time = static_cast<std::size_t>(std::chrono::duration_cast<std::chrono::milliseconds>(__stop_timer - __start_timer).count())
+                  __integral_time = static_cast<std::size_t>(std::chrono::duration_cast<std::chrono::microseconds>(__stop_timer - __start_timer).count())
 
                   
-#define GET_TIMER (__integral_time / 1000.0)
+#define GET_TIMER (__integral_time / 1000000.0)
 #define SHOW_TIMER std::cout << std::setprecision(3) << GET_TIMER << "s" << std::endl
 #endif
 
@@ -65,7 +65,9 @@ namespace kmcomp
     }
 
     //Start multiple path TSP instances to be solved using Nearest-Neighbor, need 
-    double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::size_t GROUPSIZE, const std::size_t SUBSAMPLED_ROWS, std::vector<std::uint64_t>& order, double error_factor = 0.0);
+    double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::size_t GROUPSIZE, const std::size_t SUBSAMPLED_ROWS, std::vector<std::uint64_t>& order, double epsilon = 0.0);
+
+    double compute_order_from_matrix_rows(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, std::size_t groupsize, const std::size_t SUBSAMPLED_COLS, std::vector<std::uint64_t>& order, double epsilon = 0.0);
 
     //Reorder matrix columns (bit-swapping on memory-mapped file)
     void reorder_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, const std::size_t BLOCK_TARGET_SIZE);

@@ -146,7 +146,7 @@ namespace kmcomp
         return ROW_LENGTH * target_block_nb_rows(NB_COLS, BLOCK_TARGET_SIZE); 
     }
   
-    double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, std::size_t groupsize, std::size_t subsampled_rows, std::vector<std::uint64_t>& order, double error_factor)
+    double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, std::size_t groupsize, std::size_t subsampled_rows, std::vector<std::uint64_t>& order, double epsilon)
     {
         int fd = open(MATRIX_PATH.c_str(), O_RDONLY); 
         if(fd < 0)
@@ -190,22 +190,20 @@ namespace kmcomp
 
         std::size_t offset = 0; //Offset for global order assignation
 
-
-        #if KMCOMP_METRICS
         std::size_t computed_distances = 0;
-        #endif
-        
+
         double original_consecutive_distances_sum = 0.0;
         double new_consecutive_distances_sum = 0.0;
+
+        #ifdef KMCOMP_METRICS
+        DECLARE_TIMER;
+        START_TIMER;
+        #endif
 
         for(std::size_t i = 0; i + 1 < NB_GROUPS; ++i)
         {
             //Find a suboptimal path minimizing the weight of edges and visiting each node once
-            #ifdef KMCOMP_METRICS
-            computed_distances += build_double_ended_NN(transposed_matrix, groupsize, subsampled_rows, offset, order, error_factor);
-            #else
-            build_double_ended_NN(transposed_matrix, groupsize, subsampled_rows, offset, order, error_factor);
-            #endif
+            computed_distances += build_cols_double_ended_NN(transposed_matrix, groupsize, subsampled_rows, offset, order, epsilon);
 
             for(std::size_t j = 0; j + 1 < groupsize; ++j)
             {
@@ -216,17 +214,11 @@ namespace kmcomp
             offset += groupsize;
         }
 
-        #ifdef KMCOMP_METRICS
-        DECLARE_TIMER;
-        START_TIMER;
-        computed_distances += build_double_ended_NN(transposed_matrix, last_group_size, subsampled_rows, offset, order, error_factor);
-        #else
-        build_double_ended_NN(transposed_matrix, last_group_size, subsampled_rows, offset, order, error_factor);
-        #endif
+        computed_distances += build_cols_double_ended_NN(transposed_matrix, last_group_size, subsampled_rows, offset, order, epsilon);
 
         for(std::size_t j = 0; j + 1 < last_group_size; ++j)
         {
-            original_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, j+offset, j+1+offset);;
+            original_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, j+offset, j+1+offset);
             new_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, order[j+offset], order[j+1+offset]);
         }
 
@@ -270,6 +262,91 @@ namespace kmcomp
         #endif
 
         KMCOMP_DELETE_MATRIX(transposed_matrix);
+
+        return original_consecutive_distances_sum / new_consecutive_distances_sum;
+    }
+
+    double compute_order_from_matrix_rows(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, std::size_t groupsize, std::size_t subsampled_cols, std::vector<std::uint64_t>& order, double epsilon)
+    {
+        int fd = open(MATRIX_PATH.c_str(), O_RDONLY); 
+        if(fd < 0)
+            throw std::runtime_error("[ERROR] kmcomp::compute_order_from_matrix_rows : Failed to open a file descriptor on reference matrix.");
+
+        const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
+        const std::size_t FILE_SIZE = HEADER + ROW_LENGTH * NB_ROWS;
+
+        order.resize(ROW_LENGTH * 8);
+
+        char * const mapped_file = (char*)mmap(nullptr, FILE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+
+        if(subsampled_cols == 0)
+            subsampled_cols = NB_COLS;
+
+        if(subsampled_cols > NB_COLS)
+            throw std::invalid_argument("[ERROR] kmcomp::compute_order_from_matrix_columns : Number of subsampled rows can't be greater to the number of rows in the binary matrix. Maybe one of the parameters is wrong ?");
+
+        if(groupsize == 0 || groupsize > NB_ROWS)
+            groupsize = NB_ROWS;
+
+        std::size_t last_group_size;
+
+        //Number of group of columns
+        const std::size_t NB_GROUPS = (NB_ROWS*8+groupsize-1)/groupsize;
+
+        if(NB_ROWS % groupsize == 0)
+            last_group_size = groupsize;
+        else
+            last_group_size = NB_ROWS % groupsize;
+
+        std::size_t offset = 0; //Offset for global order assignation
+
+        std::size_t computed_distances = 0;
+
+        double original_consecutive_distances_sum = 0.0;
+        double new_consecutive_distances_sum = 0.0;
+
+        #ifdef KMCOMP_METRICS
+        DECLARE_TIMER;
+        START_TIMER;
+        #endif
+
+        for(std::size_t i = 0; i + 1 < NB_GROUPS; ++i)
+        {
+            //Find a suboptimal path minimizing the weight of edges and visiting each node once
+            computed_distances += build_rows_double_ended_NN(mapped_file, HEADER, groupsize, subsampled_cols, offset, order, epsilon);
+
+            for(std::size_t j = 0; j + 1 < groupsize; ++j)
+            {
+                original_consecutive_distances_sum += hamming_distance(reinterpret_cast<const std::uint8_t*>(GET_ROW_PTR(j+offset)), reinterpret_cast<const std::uint8_t*>(GET_ROW_PTR(j+1+offset)), subsampled_cols/8);
+                new_consecutive_distances_sum += hamming_distance(reinterpret_cast<const std::uint8_t*>(GET_ROW_PTR(order[j+offset])), reinterpret_cast<const std::uint8_t*>(GET_ROW_PTR(order[j+1+offset])), subsampled_cols/8);
+            }
+
+            offset += groupsize;
+        }
+
+        computed_distances += build_rows_double_ended_NN(mapped_file, HEADER, last_group_size, subsampled_cols, offset, order, epsilon);
+
+        for(std::size_t j = 0; j + 1 < last_group_size; ++j)
+        {
+            original_consecutive_distances_sum += hamming_distance(reinterpret_cast<const std::uint8_t*>(GET_ROW_PTR(j+offset)), reinterpret_cast<const std::uint8_t*>(GET_ROW_PTR(j+1+offset)), subsampled_cols/8);
+            new_consecutive_distances_sum += hamming_distance(reinterpret_cast<const std::uint8_t*>(GET_ROW_PTR(order[j+offset])), reinterpret_cast<const std::uint8_t*>(GET_ROW_PTR(order[j+1+offset])), subsampled_cols/8);
+        }
+
+        #ifdef KMCOMP_METRICS
+        END_TIMER;
+        metrics["3_time_permutation_rows(s)"] = GET_TIMER;
+        #endif
+
+        #ifdef KMCOMP_METRICS
+        START_TIMER;
+        #endif
+
+        reorder_matrix_rows(mapped_file, HEADER, ROW_LENGTH, order);
+
+        #ifdef KMCOMP_METRICS
+        END_TIMER;
+        metrics["3_time_reorder_rows(s)"] = GET_TIMER;
+        #endif
 
         return original_consecutive_distances_sum / new_consecutive_distances_sum;
     }
