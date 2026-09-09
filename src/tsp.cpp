@@ -1,4 +1,4 @@
-#include <tsp.h>
+#include <tsp.hpp>
 #include <vptree.hpp>
 
 #include <deque>

@@ -12,9 +12,12 @@
 #include <stdexcept>
 #include <random>
 #include <vector>
+#include <unistd.h>
+#include <fcntl.h>
 
-#include <tsp.h>
-#include <zstd/BlockCompressorZSTD.h>
+#include <tsp.hpp>
+#include <block_compressor.hpp>
+#include <compressor_zstd.hpp>
 
 #ifdef KMCOMP_METRICS
 //Global JSON object for storing metrics

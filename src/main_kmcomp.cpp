@@ -1,4 +1,4 @@
-#include <kmcomp.h>
+#include <kmcomp.hpp>
 #include <cxxopts.hpp>
 #include <fstream>
 #include <filesystem>
@@ -352,7 +352,18 @@ int main(int argc, char ** argv)
             #ifdef KMCOMP_METRICS
             START_TIMER;
             #endif
-            BlockCompressorZSTD(output_path, output_ef_path, config_path).compress_file(input_path, header);
+
+            int fd = open(input_path.c_str(), O_RDONLY);
+            const char* map = (const char*)mmap(nullptr, FILE_SIZE, PROT_READ, MAP_PRIVATE, fd, 0);
+            block_compressor::CompressorZstd compressor(preset_level);
+            block_compressor::IntContainerRaw<std::uint64_t> int_container;
+            int_container.reserve(FILE_SIZE/BLOCK_SIZE+2);
+            block_compressor::BlockCompressor bc(output_path, BLOCK_SIZE, compressor, int_container);
+            bc.write_raw_data(map, header);
+            bc.append_data(map, FILE_SIZE-header);
+            munmap(const_cast<char*>(map), FILE_SIZE);
+            close(fd);
+
             #ifdef KMCOMP_METRICS
             END_TIMER;
             metrics["3_time_compression(s)"] = GET_TIMER;

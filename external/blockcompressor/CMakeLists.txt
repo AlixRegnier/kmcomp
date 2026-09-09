@@ -1,10 +1,14 @@
 include(FetchContent)
 
-FetchContent_Declare(block_compressor
-  GIT_REPOSITORY https://github.com/AlixRegnier/BlockCompressor.git
-  GIT_TAG main
+set(BLOCKCOMPRESSOR_ENABLE_ZSTD ON CACHE BOOL
+    "Enable Zstd support in BlockCompressor" FORCE
 )
-FetchContent_MakeAvailable(block_compressor)
 
-add_library(block_compressor_ext ALIAS block_compressor)
+FetchContent_Declare(blockcompressor
+  GIT_REPOSITORY https://github.com/AlixRegnier/BlockCompressor.git
+  GIT_TAG dev
+)
+FetchContent_MakeAvailable(blockcompressor)
+
+add_library(blockcompressor_ext ALIAS blockcompressor)
 

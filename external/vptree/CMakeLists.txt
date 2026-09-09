@@ -1,8 +1,8 @@
 include(FetchContent)
 
 FetchContent_Declare(vptree
-GIT_REPOSITORY "git@github.com:AlixRegnier/VPTree.git" #"https://github.com/AlixRegnier/VPTree.git"
-GIT_TAG main
+  GIT_REPOSITORY "https://github.com/AlixRegnier/VPTree.git"
+  GIT_TAG main
 )
 
 FetchContent_MakeAvailable(vptree)

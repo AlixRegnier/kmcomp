@@ -1,4 +1,4 @@
-#include <kmcomp.h>
+#include <kmcomp.hpp>
 #include <cstdint>
 #include <cmath>
 
@@ -463,7 +463,7 @@ namespace kmcomp
         int fd = open(MATRIX_PATH.c_str(), O_RDONLY);
 
         //Since no modifications will be applied to original matrix, open it with MAP_PRIVATE mode
-        char * const mapped_file = (char* const)mmap(nullptr, FILE_SIZE, PROT_READ, MAP_PRIVATE, fd, 0);
+        char * mapped_file = (char*)mmap(nullptr, FILE_SIZE, PROT_READ, MAP_PRIVATE, fd, 0);
 
         if(mapped_file == MAP_FAILED)
             throw std::runtime_error("[ERROR] kmcomp::reorder_matrix_columns_and_compress : mmap() initialization failed for reordering matrix.");
@@ -477,8 +477,11 @@ namespace kmcomp
         START_TIMER;
         #endif
 
-        BlockCompressorZSTD block_compressor(OUTPUT_PATH, OUTPUT_EF_PATH, CONFIG_PATH);
-        block_compressor.write_header(mapped_file, HEADER);
+        block_compressor::IntContainerRaw<std::uint64_t> ef;
+        ef.reserve(NB_BLOCKS+1);
+        block_compressor::CompressorZstd compressor;
+        block_compressor::BlockCompressor bc(OUTPUT_PATH, BLOCK_SIZE, compressor, ef);
+        bc.write_raw_data(mapped_file, HEADER);
 
         #ifdef KMCOMP_METRICS
         END_TIMER;
@@ -501,7 +504,7 @@ namespace kmcomp
             #endif
 
             //Bring buffered block to compressor
-            block_compressor.append_block(reinterpret_cast<std::uint8_t*>(buffered_block), BLOCK_SIZE);
+            bc.append_data(buffered_block, BLOCK_SIZE);
 
             #ifdef KMCOMP_METRICS
             END_TIMER;
@@ -522,10 +525,10 @@ namespace kmcomp
         START_TIMER;
         #endif
         //Bring last block to compressor
-        block_compressor.append_block(reinterpret_cast<std::uint8_t*>(buffered_block), last_block_size);
+        bc.append_data(buffered_block, last_block_size);
 
         //Close
-        block_compressor.close();
+        bc.close();
 
         #ifdef KMCOMP_METRICS
         END_TIMER;
