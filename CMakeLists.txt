@@ -92,6 +92,8 @@ else()
     message(STATUS "Unknown architecture, use fallback without SIMD.")
 endif()
 
+#SET(CMAKE_CXX_FLAGS ${KMCOMP_SIMD_FLAGS})
+
 # -----------------------------------------------------------------------------
 # Command-line executable
 # -----------------------------------------------------------------------------
