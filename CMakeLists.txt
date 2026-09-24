@@ -21,12 +21,53 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(KMCOMP_COMPILE_FLAGS 
+    -O3
+    -march=native
+)
+
 # -----------------------------------------------------------------------------
 # Dependencies used by the kmcomp library
 # -----------------------------------------------------------------------------
 
 # Header-only dependencies required by the core library.
 add_subdirectory(external)
+
+# -----------------------------------------------------------------------------
+# Architecture
+# -----------------------------------------------------------------------------
+
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" KMCOMP_ARCH)
+
+set(KMCOMP_SIMD_FLAGS "")
+if(KMCOMP_ARCH MATCHES "^(x86_64|amd64|i386|i686)$")
+    # Add any compiler/CPU configuration here if these files define
+    # functions/macros used below.
+    include(cmake/sse2.cmake)
+    include(cmake/avx2.cmake)
+
+    check_for_sse2()
+    check_for_avx2()
+
+    if(HAS_AVX2)
+        message(STATUS "AVX2 support detected.")
+        set(KMCOMP_SIMD_FLAGS "KMCOMP_USE_AVX2")
+        list(APPEND KMCOMP_COMPILE_FLAGS -mavx2 -msse2)
+    elseif(HAS_SSE2)
+        message(STATUS "SSE2 support detected.")
+        set(KMCOMP_SIMD_FLAGS "KMCOMP_USE_SSE2")
+        list(APPEND KMCOMP_COMPILE_FLAGS -msse2)
+    else()
+        message(STATUS "AVX2 not supported, use fallback without SIMD.")
+    endif()
+
+elseif(KMCOMP_ARCH MATCHES "^(arm64|aarch64)$")
+    message(STATUS "ARM NEON support assumed (baseline on aarch64).")
+    set(KMCOMP_SIMD_FLAGS "KMCOMP_ARCH_NEON")
+else()
+    message(STATUS "Unknown architecture, use fallback without SIMD.")
+endif()
+
 
 # -----------------------------------------------------------------------------
 # kmcomp static library
@@ -63,36 +104,15 @@ if(KMCOMP_METRICS)
     )
 endif()
 
-string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" KMCOMP_ARCH)
+target_compile_definitions(kmcomp
+    PRIVATE
+        ${KMCOMP_SIMD_FLAGS}
+)
 
-set(KMCOMP_SIMD_FLAGS "")
-if(KMCOMP_ARCH MATCHES "^(x86_64|amd64|i386|i686)$")
-    # Add any compiler/CPU configuration here if these files define
-    # functions/macros used below.
-    include(cmake/sse2.cmake)
-    include(cmake/avx2.cmake)
-
-    check_for_sse2()
-    check_for_avx2()
-
-    if(HAS_AVX2)
-        message(STATUS "AVX2 support detected.")
-        set(KMCOMP_SIMD_FLAGS -DKMCOMP_USE_AVX2 -msse2 -mavx2)
-    elseif(HAS_SSE2)
-        message(STATUS "SSE2 support detected.")
-        set(KMCOMP_SIMD_FLAGS -DKMCOMP_USE_SSE2 -msse2)
-    else()
-        message(STATUS "AVX2 not supported, use fallback without SIMD.")
-    endif()
-
-elseif(KMCOMP_ARCH MATCHES "^(arm64|aarch64)$")
-    message(STATUS "ARM NEON support assumed (baseline on aarch64).")
-    set(KMCOMP_SIMD_FLAGS -DKMCOMP_ARCH_NEON)
-else()
-    message(STATUS "Unknown architecture, use fallback without SIMD.")
-endif()
-
-#SET(CMAKE_CXX_FLAGS ${KMCOMP_SIMD_FLAGS})
+target_compile_options(kmcomp
+    PRIVATE
+        ${KMCOMP_COMPILE_FLAGS}
+)
 
 # -----------------------------------------------------------------------------
 # Command-line executable
@@ -128,5 +148,15 @@ if(KMCOMP_BUILD_MAIN OR KMCOMP_METRICS)
                 KMCOMP_METRICS
         )
     endif()
+
+    target_compile_definitions(kmcomp_cli
+        PRIVATE
+            ${KMCOMP_SIMD_FLAGS}
+    )
+
+    target_compile_options(kmcomp_cli
+        PRIVATE
+            ${KMCOMP_COMPILE_FLAGS}
+    )
 
 endif()
