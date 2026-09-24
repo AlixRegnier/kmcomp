@@ -130,20 +130,20 @@ namespace kmcomp
 #undef OUT
 #undef INP
     
-    std::size_t target_block_nb_rows(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE)
+    std::size_t target_transp_block_nb_rows(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE)
     {
         const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
 
-        //Compute the number of rows in a block and round to next multiple of 8 
-        return (((BLOCK_TARGET_SIZE+ROW_LENGTH-1) / ROW_LENGTH) + 7) / 8 * 8;
+        //Compute the number of rows in a block and round to next multiple of 16
+        return (((BLOCK_TARGET_SIZE+ROW_LENGTH-1) / ROW_LENGTH) + 15) / 16 * 16;
     }
 
-    std::size_t target_block_size(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE)
+    std::size_t target_transp_block_size(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE)
     {
         const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
 
         //Block size will most of time be slightly bigger than targeted size
-        return ROW_LENGTH * target_block_nb_rows(NB_COLS, BLOCK_TARGET_SIZE); 
+        return ROW_LENGTH * target_transp_block_nb_rows(NB_COLS, BLOCK_TARGET_SIZE); 
     }
   
     double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, std::size_t groupsize, std::size_t subsampled_rows, std::vector<std::uint64_t>& order, double error_factor)
@@ -359,7 +359,7 @@ namespace kmcomp
 
     #endif
 
-    void reorder_block(const char * input_block, char * tmp_block, char * output_block, const std::size_t BLOCK_SIZE, const std::size_t BLOCK_NB_ROWS, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER)
+    void reorder_block(const char * input_block, char * tmp_block, char * output_block, char * row_buffer, const std::size_t BLOCK_SIZE, const std::size_t BLOCK_NB_ROWS, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER)
     {
         //Copy block from disk to memory
         if(input_block != output_block)
@@ -369,25 +369,27 @@ namespace kmcomp
         __sse2_trans(reinterpret_cast<const std::uint8_t*>(output_block), reinterpret_cast<std::uint8_t*>(tmp_block), BLOCK_NB_ROWS, ROW_LENGTH*8);
 
         //Reorder block columns (by reordering transposed block rows)
-        reorder_matrix_rows(tmp_block, 0, BLOCK_NB_ROWS/8, ORDER);
+        reorder_matrix_rows(tmp_block, row_buffer, 0, BLOCK_NB_ROWS/8, ORDER);
 
         //Transpose matrix block back
         __sse2_trans(reinterpret_cast<const std::uint8_t*>(tmp_block), reinterpret_cast<std::uint8_t*>(output_block), ROW_LENGTH*8, BLOCK_NB_ROWS);
     }
 
-    void reorder_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, const std::size_t BLOCK_TARGET_SIZE)
+    void reorder_matrix_columns(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER)
     {
+        constexpr std::size_t TARGET_BLOCK_SIZE = 1 << 21; // 2 MiB
+        
         //Get row length in bytes
         const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
 
-        //Compute the number of rows in a block and round to next multiple of 8 
-        const std::size_t BLOCK_NB_ROWS = target_block_nb_rows(NB_COLS, BLOCK_TARGET_SIZE);
+        //Compute the number of rows in a block and round to next multiple of 16
+        const std::size_t BLOCK_NB_ROWS = target_transp_block_nb_rows(ROW_LENGTH*8, TARGET_BLOCK_SIZE);
 
         //Block size will most of time be slightly bigger than targeted size
-        const std::size_t BLOCK_SIZE = target_block_size(NB_COLS, BLOCK_TARGET_SIZE); 
+        const std::size_t BLOCK_SIZE = target_transp_block_size(ROW_LENGTH*8, TARGET_BLOCK_SIZE);
 
         //The last block may not be full
-        const std::size_t NB_BLOCKS = (NB_ROWS+BLOCK_NB_ROWS-1) / BLOCK_NB_ROWS; 
+        const std::size_t NB_BLOCKS = (NB_ROWS+BLOCK_NB_ROWS-1) / BLOCK_NB_ROWS;
 
         //Overshoot allows to consider last block as full and to apply operations, overshooted rows won't be written 
         const std::size_t FILE_SIZE = HEADER + NB_ROWS * ROW_LENGTH;
@@ -399,6 +401,7 @@ namespace kmcomp
 
         char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
         char * transposed_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
+        char * row_buffer = new char[ROW_LENGTH];
 
         int fd = open(MATRIX_PATH.c_str(), O_RDWR);
         char * mapped_file = (char*)mmap(nullptr, FILE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -413,39 +416,42 @@ namespace kmcomp
         for(; i + 1 < NB_BLOCKS; ++i)
         {
             //Reorder block
-            reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, BLOCK_SIZE, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+            reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, row_buffer, BLOCK_SIZE, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
 
             //Copy block from memory to disk
             std::memcpy(GET_BLOCK_PTR(i), buffered_block, BLOCK_SIZE);
         }
 
         //Reorder last block
-        reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, last_block_size, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+        reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, row_buffer, last_block_size, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
 
         //Copy last block from memory to disk 
         std::memcpy(GET_BLOCK_PTR(i), buffered_block, last_block_size);
 
         KMCOMP_DELETE_MATRIX(buffered_block);
         KMCOMP_DELETE_MATRIX(transposed_block);
+        delete[] row_buffer;
 
         munmap(mapped_file, FILE_SIZE);
         close(fd);
     }
 
-    void reorder_matrix_columns_and_compress(const std::string& MATRIX_PATH, const std::string& OUTPUT_PATH, const std::string& OUTPUT_EF_PATH, const std::string& CONFIG_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, std::size_t BLOCK_TARGET_SIZE)
+    void reorder_matrix_columns_and_compress(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, block_compressor::BlockCompressor& block_compr)
     {
         #ifdef KMCOMP_METRICS
         DECLARE_TIMER;
         #endif
 
+        constexpr std::size_t TARGET_BLOCK_SIZE = 1 << 21; // 2 MiB
+        
         //Get row length in bytes
         const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
 
-        //Compute the number of rows in a block and round to next multiple of 8 
-        const std::size_t BLOCK_NB_ROWS = target_block_nb_rows(NB_COLS, BLOCK_TARGET_SIZE);
+        //Compute the number of rows in a block and round to next multiple of 16
+        const std::size_t BLOCK_NB_ROWS = target_transp_block_nb_rows(ROW_LENGTH*8, TARGET_BLOCK_SIZE);
 
         //Block size will most of time be slightly bigger than targeted size
-        const std::size_t BLOCK_SIZE = target_block_size(NB_COLS, BLOCK_TARGET_SIZE); 
+        const std::size_t BLOCK_SIZE = target_transp_block_size(ROW_LENGTH*8, TARGET_BLOCK_SIZE);
 
         //The last block may not be full
         const std::size_t NB_BLOCKS = (NB_ROWS+BLOCK_NB_ROWS-1) / BLOCK_NB_ROWS; 
@@ -459,6 +465,7 @@ namespace kmcomp
 
         char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
         char * transposed_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
+        char * row_buffer = new char[ROW_LENGTH];
 
         int fd = open(MATRIX_PATH.c_str(), O_RDONLY);
 
@@ -477,11 +484,7 @@ namespace kmcomp
         START_TIMER;
         #endif
 
-        block_compressor::IntContainerRaw<std::uint64_t> ef;
-        ef.reserve(NB_BLOCKS+1);
-        block_compressor::CompressorZstd compressor;
-        block_compressor::BlockCompressor bc(OUTPUT_PATH, BLOCK_SIZE, compressor, ef);
-        bc.write_raw_data(mapped_file, HEADER);
+        block_compr.write_raw_data(mapped_file, HEADER);
 
         #ifdef KMCOMP_METRICS
         END_TIMER;
@@ -495,7 +498,7 @@ namespace kmcomp
             #ifdef KMCOMP_METRICS
             START_TIMER;
             #endif
-            reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, BLOCK_SIZE, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+            reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, row_buffer, BLOCK_SIZE, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
             #ifdef KMCOMP_METRICS
             END_TIMER;
             time_reorder += __integral_time;
@@ -504,7 +507,7 @@ namespace kmcomp
             #endif
 
             //Bring buffered block to compressor
-            bc.append_data(buffered_block, BLOCK_SIZE);
+            block_compr.append_data(buffered_block, BLOCK_SIZE);
 
             #ifdef KMCOMP_METRICS
             END_TIMER;
@@ -517,7 +520,7 @@ namespace kmcomp
         #endif
 
         //Handle last block that may be smaller, only block effective size differs
-        reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, last_block_size, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+        reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, row_buffer, last_block_size, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
         #ifdef KMCOMP_METRICS
         END_TIMER;
         time_reorder += __integral_time;
@@ -525,10 +528,10 @@ namespace kmcomp
         START_TIMER;
         #endif
         //Bring last block to compressor
-        bc.append_data(buffered_block, last_block_size);
+        block_compr.append_data(buffered_block, last_block_size);
 
         //Close
-        bc.close();
+        block_compr.close();
 
         #ifdef KMCOMP_METRICS
         END_TIMER;
@@ -541,17 +544,15 @@ namespace kmcomp
 
         KMCOMP_DELETE_MATRIX(buffered_block);
         KMCOMP_DELETE_MATRIX(transposed_block);
+        delete[] row_buffer;
 
         munmap(mapped_file, FILE_SIZE);
         close(fd);
     }
 
     //Linear complexity, permute objects inplace by processing cycles
-    void reorder_matrix_rows(char * mapped_file, const unsigned HEADER, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER)
+    void reorder_matrix_rows(char * mapped_file, char * row_buffer, const std::size_t HEADER, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER)
     {
-        //Buffer to store a row
-        char * buffer = new char[ROW_LENGTH];
-
         std::vector<bool> visited;
         visited.resize(ORDER.size());
     
@@ -563,7 +564,7 @@ namespace kmcomp
             
             //Start of a new cycle
             std::size_t current = i;
-            std::memcpy(buffer, GET_ROW_PTR(i), ROW_LENGTH);
+            std::memcpy(row_buffer, GET_ROW_PTR(i), ROW_LENGTH);
             
             //Follow the cycle
             while (!visited[current]) 
@@ -574,7 +575,7 @@ namespace kmcomp
                 if (next == i) 
                 {
                     //End of cycle - place the temp value
-                    std::memcpy(GET_ROW_PTR(current), buffer, ROW_LENGTH);
+                    std::memcpy(GET_ROW_PTR(current), row_buffer, ROW_LENGTH);
                 } 
                 else 
                 {
@@ -584,8 +585,6 @@ namespace kmcomp
                 }
             }
         }
-
-        delete[] buffer;
     }
 
     //Get an order that can be used to retrieve original matrix

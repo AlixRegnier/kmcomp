@@ -47,9 +47,9 @@ extern nlohmann::json metrics;
 
 namespace kmcomp
 {
-    std::size_t target_block_nb_rows(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE);
+    std::size_t target_transp_block_nb_rows(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE);
     
-    std::size_t target_block_size(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE);
+    std::size_t target_transp_block_size(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE);
 
     
     #ifdef KMCOMP_METRICS
@@ -71,16 +71,16 @@ namespace kmcomp
     double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::size_t GROUPSIZE, const std::size_t SUBSAMPLED_ROWS, std::vector<std::uint64_t>& order, double error_factor = 0.0);
 
     //Reorder matrix columns (bit-swapping on memory-mapped file)
-    void reorder_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, const std::size_t BLOCK_TARGET_SIZE);
+    void reorder_matrix_columns(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER);
 
     //Reorder matrix columns (bit-swapping on memory-mapped file)
-    void reorder_matrix_columns_and_compress(const std::string& MATRIX_PATH, const std::string& OUTPUT_PATH, const std::string& OUTPUT_EF_PATH, const std::string& CONFIG_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, const std::size_t BLOCK_TARGET_SIZE);
+    void reorder_matrix_columns_and_compress(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, block_compressor::BlockCompressor& block_compr);
 
     //Reorder matrix rows (row-swapping on memory-mapped file)
-    void reorder_matrix_rows(char* mapped_file, const unsigned HEADER, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER);
+    void reorder_matrix_rows(char* mapped_file, char * row_buffer, const std::size_t HEADER, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER);
 
     //Reorder block
-    void reorder_block(const char * input_block, char * tmp_block, char * output_block, const std::size_t BLOCK_SIZE, const std::size_t BLOCK_NB_ROWS, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER);
+    void reorder_block(const char * input_block, char * tmp_block, char * output_block, char * row_buffer, const std::size_t BLOCK_SIZE, const std::size_t BLOCK_NB_ROWS, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER);
 
     //Get an order that can be used to retrieve original matrix
     void reverse_order(const std::vector<std::uint64_t>& ORDER, std::vector<std::uint64_t>& reversed_order);

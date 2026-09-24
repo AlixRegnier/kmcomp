@@ -253,6 +253,16 @@ int main(int argc, char ** argv)
     const std::size_t ROW_LENGTH = (columns + 7) / 8;
     const std::size_t NB_ROWS = (FILE_SIZE - header) / ROW_LENGTH;
 
+    //Compute block size according to the number of columns
+    block_compressor::ConfigZstd config;
+    config.set_preset(preset_level);
+    config.set_bits_per_element(1, false);
+    config.set_elements_per_row(ROW_LENGTH*8, false);
+    config.set_header_size(header);
+    config.target_block_size(target_block_size);
+    std::cout << config.to_string() << std::endl;
+    config.export_config_file(config_path);
+
     #ifdef KMCOMP_METRICS
     metrics["0_input_path"] = input_path;
     metrics["1_nb_rows"] = NB_ROWS;
@@ -266,14 +276,10 @@ int main(int argc, char ** argv)
     DECLARE_TIMER;
     #endif
 
-    //Compute block size according to the number of columns
-    const std::size_t BLOCK_SIZE = kmcomp::target_block_size(columns, target_block_size);
-    const std::size_t BLOCK_NB_ROWS = kmcomp::target_block_nb_rows(columns, target_block_size);
-
     //Compute order (or deserialize if given)
     if(deserialize_order)
     {
-        order.resize(ROW_LENGTH*8);
+        order.resize(config.get_elements_per_row());
         fd = open(in_order_path.c_str(), O_RDONLY);
 
         if(fd < 0)
@@ -331,22 +337,19 @@ int main(int argc, char ** argv)
         kmcomp::reverse_order(order_tmp, order);
     }
 
-    block_compressor::ConfigZstd config;
-    config.set_preset(preset_level);
-    config.set_bits_per_element(1, false);
-    config.set_elements_per_row(ROW_LENGTH*8, false);
-    config.set_header_size(header);
-    config.target_block_size(target_block_size);
-    std::cout << config.to_string() << std::endl;
-    config.export_config_file(config_path);
-
     if(compress)
     {
         #ifdef KMCOMP_METRICS
-        metrics["1_blocksize(bytes)"] = BLOCK_SIZE;
-        metrics["1_rows_per_block"] = BLOCK_NB_ROWS;
+        metrics["1_blocksize(bytes)"] = config.get_block_size();
+        metrics["1_rows_per_block"] = config.get_rows_per_block();
         metrics["1_target_blocksize(bytes)"] = target_block_size;
         #endif
+
+        
+        block_compressor::CompressorZstd compressor(config.get_preset());
+        block_compressor::IntContainerRaw<std::uint64_t> int_container;
+        int_container.reserve(FILE_SIZE/config.get_block_size()+2);
+        block_compressor::BlockCompressor bc(output_path, config.get_block_size(), compressor, int_container);
 
         if(no_reorder)
         {
@@ -357,12 +360,11 @@ int main(int argc, char ** argv)
 
             int fd = open(input_path.c_str(), O_RDONLY);
             const char* map = (const char*)mmap(nullptr, FILE_SIZE, PROT_READ, MAP_PRIVATE, fd, 0);
-            block_compressor::CompressorZstd compressor(config.get_preset());
-            block_compressor::IntContainerRaw<std::uint64_t> int_container;
-            int_container.reserve(FILE_SIZE/config.get_block_size()+2);
-            block_compressor::BlockCompressor bc(output_path, config.get_block_size(), compressor, int_container);
+            
             bc.write_raw_data(map, header);
-            bc.append_data(map, FILE_SIZE-header);
+            bc.append_data(map+header, FILE_SIZE-header);
+            bc.close();
+
             munmap(const_cast<char*>(map), FILE_SIZE);
             close(fd);
 
@@ -374,8 +376,10 @@ int main(int argc, char ** argv)
         else 
         {
             //Reorder and compress matrix
-            kmcomp::reorder_matrix_columns_and_compress(input_path, output_path, output_ef_path, config_path, config.get_header_size(), columns, NB_ROWS, order, config.get_block_size());
+            kmcomp::reorder_matrix_columns_and_compress(input_path, config.get_header_size(), columns, NB_ROWS, order, bc);
         }
+
+        int_container.serialize_file(output_ef_path);
     }
     else if(!no_reorder)
     {
@@ -383,7 +387,7 @@ int main(int argc, char ** argv)
         START_TIMER;
         #endif
         //Reorder matrix
-        kmcomp::reorder_matrix_columns(input_path, config.get_header_size(), config.get_elements_per_row(), NB_ROWS, order, config.get_block_size());
+        kmcomp::reorder_matrix_columns(input_path, config.get_header_size(), config.get_elements_per_row(), NB_ROWS, order);
 
         #ifdef KMCOMP_METRICS
         END_TIMER;

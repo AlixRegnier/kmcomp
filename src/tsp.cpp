@@ -295,10 +295,10 @@ namespace kmcomp {
         for(std::size_t i = 0; i < vertices.size(); ++i)
             vertices[i] = i;
 
-        //Computed distances counter
-        
         //Construct metric tree
+
         #ifdef KMCOMP_METRICS
+        //Computed distances counter
         std::size_t counter = 0;
         vptree::VPTree<std::uint64_t> metric_tree(vertices.begin(), vertices.end(), [=, &counter](std::uint64_t a, std::uint64_t b) -> double {
             ++counter;
@@ -317,14 +317,14 @@ namespace kmcomp {
             orderDeque.push_back(static_cast<std::uint64_t>(first_vertex));
 
             //Add second vertex to path
-            vptree::vertex_t second_vertex = metric_tree.get_nearest_unvisited_neighbor(first_vertex).vertex;
+            vptree::vertex_t second_vertex = metric_tree.get_nearest_unvisited_neighbor(first_vertex, error_factor).vertex;
             metric_tree.set_vertex_as_visited(second_vertex);
             orderDeque.push_back(static_cast<std::uint64_t>(second_vertex));
         }
 
         //Find closest vertices from path front and back
-        vptree::nn_t<std::uint64_t> a = metric_tree.get_nearest_unvisited_neighbor(orderDeque.front());
-        vptree::nn_t<std::uint64_t> b = metric_tree.get_nearest_unvisited_neighbor(orderDeque.back());
+        vptree::nn_t<std::uint64_t> a = metric_tree.get_nearest_unvisited_neighbor(orderDeque.front(), error_factor);
+        vptree::nn_t<std::uint64_t> b = metric_tree.get_nearest_unvisited_neighbor(orderDeque.back(), error_factor);
 
         //Find next vertices to add by checking which is the minimum to take
         //Start at 3, two were handled before loop, last is handled after
@@ -333,22 +333,22 @@ namespace kmcomp {
             if(a.distance < b.distance)
             {
                 metric_tree.set_vertex_as_visited(a.vertex);
-                orderDeque.push_front(a.vertex);
+                orderDeque.push_front(static_cast<std::uint64_t>(a.vertex));
 
                 if(a.vertex == b.vertex)
-                    b = metric_tree.get_nearest_unvisited_neighbor(orderDeque.back());
+                    b = metric_tree.get_nearest_unvisited_neighbor(orderDeque.back(), error_factor);
 
-                a = metric_tree.get_nearest_unvisited_neighbor(orderDeque.front());
+                a = metric_tree.get_nearest_unvisited_neighbor(orderDeque.front(), error_factor);
             }
             else
             {
                 metric_tree.set_vertex_as_visited(b.vertex);
-                orderDeque.push_back(b.vertex);
+                orderDeque.push_back(static_cast<std::uint64_t>(b.vertex));
 
                 if(b.vertex == a.vertex)
-                    a = metric_tree.get_nearest_unvisited_neighbor(orderDeque.front());
+                    a = metric_tree.get_nearest_unvisited_neighbor(orderDeque.front(), error_factor);
 
-                b = metric_tree.get_nearest_unvisited_neighbor(orderDeque.back());
+                b = metric_tree.get_nearest_unvisited_neighbor(orderDeque.back(), error_factor);
             }
         }
 
