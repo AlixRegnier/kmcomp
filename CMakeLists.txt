@@ -21,10 +21,23 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(KMCOMP_COMPILE_FLAGS 
-    -O3
-    -march=native
-)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+string(TOLOWER "${CMAKE_BUILD_TYPE}" KMCOMP_BUILD_TYPE)
+
+if(KMCOMP_BUILD_TYPE == "debug")
+    set(KMCOMP_COMPILE_FLAGS
+        -O0
+        -g
+    )
+else()
+    set(KMCOMP_COMPILE_FLAGS
+        -O3
+        -march=native
+    )
+endif()
 
 # -----------------------------------------------------------------------------
 # Dependencies used by the kmcomp library

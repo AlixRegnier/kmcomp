@@ -18,6 +18,8 @@
 #include <tsp.hpp>
 #include <block_compressor.hpp>
 #include <compressor_zstd.hpp>
+#include <block_decompressor.hpp>
+#include <decompressor_zstd.hpp>
 
 #ifdef KMCOMP_METRICS
 //Global JSON object for storing metrics
@@ -53,7 +55,7 @@ namespace kmcomp
 
     
     #ifdef KMCOMP_METRICS
-    double get_entropy_ratio(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, std::size_t SAMPLED_BYTES = 8388608);
+    double get_entropy_ratio(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, std::size_t SAMPLED_BYTES = 8388608);
     #endif
 
     //Return how much the compression will be improved according to metric returned by 'compute_order_from_matrix_columns'
@@ -68,7 +70,7 @@ namespace kmcomp
     }
 
     //Start multiple path TSP instances to be solved using Nearest-Neighbor, need 
-    double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::size_t GROUPSIZE, const std::size_t SUBSAMPLED_ROWS, std::vector<std::uint64_t>& order, double error_factor = 0.0);
+    double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::size_t GROUPSIZE, const std::size_t SUBSAMPLED_ROWS, std::vector<std::uint64_t>& order, double error_factor = 0.0);
 
     //Reorder matrix columns (bit-swapping on memory-mapped file)
     void reorder_matrix_columns(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER);

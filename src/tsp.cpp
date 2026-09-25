@@ -286,7 +286,6 @@ namespace kmcomp {
     {
         //Deque for building path with first vertex as starting point
         std::deque<std::uint64_t> orderDeque;
-        orderDeque.resize(COLUMNS);
 
         //Build vector of vertices for VPTree
         std::vector<std::uint64_t> vertices;

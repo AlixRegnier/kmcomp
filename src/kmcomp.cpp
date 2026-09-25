@@ -146,7 +146,7 @@ namespace kmcomp
         return ROW_LENGTH * target_transp_block_nb_rows(NB_COLS, BLOCK_TARGET_SIZE); 
     }
   
-    double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, std::size_t groupsize, std::size_t subsampled_rows, std::vector<std::uint64_t>& order, double error_factor)
+    double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, std::size_t groupsize, std::size_t subsampled_rows, std::vector<std::uint64_t>& order, double error_factor)
     {
         int fd = open(MATRIX_PATH.c_str(), O_RDONLY); 
         if(fd < 0)
@@ -246,7 +246,7 @@ namespace kmcomp
         double new_consecutive_distances_variance = 0.0;
 
         //Compute variance
-        for(unsigned i = 0; i + 1 < ROW_LENGTH*8; ++i)
+        for(std::size_t i = 0; i + 1 < ROW_LENGTH*8; ++i)
         {
             original_consecutive_distances_variance += std::pow(columns_hamming_distance(transposed_matrix, subsampled_rows, i, i+1) - original_consecutive_distances_average, 2);
             new_consecutive_distances_variance += std::pow(columns_hamming_distance(transposed_matrix, subsampled_rows, order[i], order[i+1]) - new_consecutive_distances_average, 2);
@@ -310,7 +310,7 @@ namespace kmcomp
         return compute_byte_entropy(counts);
     }
 
-    double get_entropy_ratio(const std::string& MATRIX_PATH, const unsigned HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, std::size_t SAMPLED_BYTES)
+    double get_entropy_ratio(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, std::size_t SAMPLED_BYTES)
     {
         //Get row length in bytes
         const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
