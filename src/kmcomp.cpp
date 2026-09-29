@@ -1,7 +1,3 @@
-#include <kmcomp.hpp>
-#include <cstdint>
-#include <cmath>
-
 #if defined(KMCOMP_USE_AVX2)
 #define KMCOMP_USE_SSE2 1
 #include <immintrin.h>
@@ -10,6 +6,9 @@
 #if defined(KMCOMP_USE_SSE2)
 #include <emmintrin.h>
 #endif
+
+#include <kmcomp.hpp>
+#include <tsp.hpp>
 
 #define GET_ROW_PTR(x) (mapped_file+HEADER+((std::size_t)(x))*ROW_LENGTH)
 #define GET_BLOCK_PTR(x) (mapped_file+HEADER+((std::size_t)(x))*BLOCK_SIZE)

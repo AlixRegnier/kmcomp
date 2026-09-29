@@ -1,31 +1,19 @@
 #ifndef KMCOMP_KMCOMP_H
 #define KMCOMP_KMCOMP_H
 
-#include <cstring>
-#include <algorithm>
-#include <cmath>
-#include <cstring>
-#include <deque>
-#include <fstream>
-#include <iomanip>
-#include <iostream>
-#include <stdexcept>
-#include <random>
+#include <cstdint>
+#include <string>
 #include <vector>
-#include <unistd.h>
-#include <fcntl.h>
 
-#include <tsp.hpp>
-#include <block_compressor.hpp>
-#include <compressor_zstd.hpp>
-#include <block_decompressor.hpp>
-#include <decompressor_zstd.hpp>
+#include <block_compressor/block_compressor.hpp>
 
 #ifdef KMCOMP_METRICS
 //Global JSON object for storing metrics
 #include <nlohmann/json.hpp>
 extern nlohmann::json metrics;
+
 #include <chrono>
+#include <iostream>
 
 #define DECLARE_TIMER std::chrono::time_point<std::chrono::high_resolution_clock> __start_timer, __stop_timer; std::size_t __integral_time
 
@@ -45,7 +33,6 @@ extern nlohmann::json metrics;
 
 #define KMCOMP_ALLOCATE_MATRIX(nrows, ncols) new char[(nrows)*((ncols)/8)]
 #define KMCOMP_DELETE_MATRIX(ptr) delete[] (ptr)
-
 
 namespace kmcomp
 {

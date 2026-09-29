@@ -1,4 +1,4 @@
-add_subdirectory(blockcompressor)
+add_subdirectory(block_compressor)
 add_subdirectory(vptree)
 
 if(KMCOMP_BUILD_MAIN)

@@ -3,7 +3,6 @@
 
 #include <cstdint>
 #include <vector>
-#include <kmcomp.hpp>
 
 namespace kmcomp
 {

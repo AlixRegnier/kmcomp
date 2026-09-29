@@ -1,10 +1,17 @@
-#include <kmcomp.hpp>
-#include <cxxopts.hpp>
 #include <fstream>
 #include <filesystem>
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
+
+#include <cxxopts.hpp>
+
+#include <kmcomp.hpp>
+
+#include <block_compressor/block_compressor.hpp>
+#include <block_compressor/block_decompressor.hpp>
+#include <block_compressor/compressor_zstd.hpp>
+#include <block_compressor/decompressor_zstd.hpp>
 
 #ifdef KMCOMP_METRICS
 //Initialize metrics global JSON object

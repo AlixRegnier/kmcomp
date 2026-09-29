@@ -27,7 +27,7 @@ endif()
 
 string(TOLOWER "${CMAKE_BUILD_TYPE}" KMCOMP_BUILD_TYPE)
 
-if(KMCOMP_BUILD_TYPE == "debug")
+if(KMCOMP_BUILD_TYPE STREQUAL "debug")
     set(KMCOMP_COMPILE_FLAGS
         -O0
         -g
@@ -100,7 +100,7 @@ target_include_directories(kmcomp
 
 target_link_libraries(kmcomp
     PUBLIC
-        blockcompressor_ext
+        block_compressor_ext
         vptree_ext
         external_zstd
 )

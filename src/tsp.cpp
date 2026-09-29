@@ -1,8 +1,11 @@
-#include <tsp.hpp>
-#include <vptree.hpp>
 
 #include <deque>
-#include <float.h>
+#include <stdexcept>
+
+#include <tsp.hpp>
+
+#include <vptree.hpp>
+
 #if defined(KMCOMP_USE_AVX2)
 #define KMCOMP_USE_SSE2 1
 #include <immintrin.h>
@@ -272,8 +275,6 @@ uint64_t hamming_distance_unaligned(const uint8_t* a, const uint8_t* b, const ui
     return total;
 }
 #endif
-
-#include <stdexcept>
 
 namespace kmcomp {
 
