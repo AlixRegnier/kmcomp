@@ -28,7 +28,7 @@ void usage()
 -d, --decompress-to\t<str>\tWrite out decompressed matrix to path.\n\
 -z, --compress-to\t<str>\tWrite out compressed matrix to path.\n\
 -f, --from-order\t<str>\tLoad permutation file from path.\n\
--g, --group-size\t<int>\tPartition column reordering into groups of given size {%columns%}.\n\
+-g, --group-size\t<int>\tPartition column reordering into groups of given size {\%columns%}.\n\
 --header\t\t<int>\tInput matrix header size {0}.\n\
 -h, --help\t\t\tPrint help.\n\
 -i, --input\t\t<str>\tInput matrix file path.\n"
@@ -43,6 +43,20 @@ void usage()
 -s, --subsample-size\t<int>\tNumber of rows to use for distance computation {10000}.\n\
 --threshold\t\t<int>\tReorder only if permutation would improve compression more than given percent (%).\n\
 -t, --to-order\t\t<str>\tWrite out permutation file to path.\n\n";
+}
+
+inline std::size_t get_file_size(const std::string& path)
+{
+    //Get file size to get the number of rows
+    int fd = open(path.c_str(), O_RDONLY); //Open matrix in read-only
+
+    if(fd < 0)
+        throw kmcomp::kmcomp_error("kmcomp", "main", "Open syscall failed on file '" + path + "'");
+
+    std::size_t r = lseek(fd, 0, SEEK_END);
+
+    close(fd);
+    return r;
 }
 
 inline void reverse_order(std::vector<std::uint64_t>& order)
@@ -81,9 +95,8 @@ inline void decompress_matrix(const std::string& input_path, const std::string& 
         throw kmcomp::kmcomp_error("kmcomp", "main", "Could not open stream for decompressing matrix");
     }
 
-    out_stream.write(header_buffer, header);
+    out_stream.write(header_buffer, header_size);
     delete[] header_buffer;
-
 
     block_compressor::DecompressorZstd decompressor;
     block_compressor::IntContainerRaw<std::uint64_t> int_container;
@@ -92,6 +105,67 @@ inline void decompress_matrix(const std::string& input_path, const std::string& 
     block_compressor::BlockDecompressor bd(input_path, block_size, decompressor, int_container, header_size);
     bd.decompress_all(out_stream);
     out_stream.close();
+}
+
+inline void get_order_from_file(const std::string& order_path, std::vector<std::uint64_t>& order, std::size_t size)
+{
+    order.resize(size);
+    int fd = open(order_path.c_str(), O_RDONLY);
+
+    if(fd < 0)
+        throw kmcomp::kmcomp_error("kmcomp", "get_order_from_file", "Could not deserialize order file '" + order_path + "', open syscall failed");
+
+    const std::size_t real_size = sizeof(std::uint64_t) * size;
+    if(read(fd, reinterpret_cast<char*>(order.data()), real_size) != real_size)
+    {
+        close(fd);
+        throw kmcomp::kmcomp_error("kmcomp", "get_order_from_file", "Order file '" + order_path + "' has unexpected size, too small");
+    }
+    close(fd);
+}
+
+inline void compress_matrix(const std::string& input_path, std::size_t file_size, std::size_t header_size, std::size_t block_size, std::size_t preset, const std::string& output_path, const std::string& output_ef_path)
+{
+    //Compress matrix
+    #ifdef KMCOMP_METRICS
+    START_TIMER;
+    #endif
+
+    block_compressor::CompressorZstd compressor(preset);
+    block_compressor::IntContainerRaw<std::uint64_t> int_container;
+    int_container.reserve(file_size / block_size + 2);
+    block_compressor::BlockCompressor bc(output_path, block_size, compressor, int_container);
+    
+    int fd = open(input_path.c_str(), O_RDONLY);
+    const char* map = (const char*)mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    
+    bc.write_raw_data(map, header_size);
+    bc.append_data(map+header_size, file_size - header_size);
+
+    munmap(const_cast<char*>(map), file_size);
+    close(fd);
+
+    bc.close();
+    int_container.serialize_file(output_ef_path);
+
+    #ifdef KMCOMP_METRICS
+    END_TIMER;
+    metrics["3_time_compression(s)"] = GET_TIMER;
+    #endif
+}
+
+inline void reorder_and_compress_matrix(const std::string& input_path, std::size_t columns, std::size_t nb_rows, std::size_t file_size, std::size_t header_size, std::size_t block_size, std::size_t preset, const std::vector<uint64_t>& order, const std::string& output_path, const std::string& output_ef_path)
+{
+    block_compressor::CompressorZstd compressor(preset);
+    block_compressor::IntContainerRaw<std::uint64_t> int_container;
+    int_container.reserve(file_size / block_size + 2);
+    block_compressor::BlockCompressor bc(output_path, block_size, compressor, int_container);
+            
+    //Reorder and compress matrix
+    kmcomp::reorder_matrix_columns_and_compress(input_path, header_size, columns, nb_rows, order, bc);
+
+    bc.close();
+    int_container.serialize_file(output_ef_path);
 }
 
 int main(int argc, char ** argv)
@@ -178,13 +252,13 @@ int main(int argc, char ** argv)
         if (!args.count("columns"))
             throw kmcomp::kmcomp_error("kmcomp", "main", "Number of columns required");
 
-        columns = args["columns"].as<std::size_t>();
+        columns = (args["columns"].as<std::size_t>() + 7) / 8 * 8;
 
         // Get optional arguments
         if (args.count("group-size"))
             groupsize = args["group-size"].as<std::size_t>();
         else
-            groupsize = (columns + 7) / 8 * 8;
+            groupsize = columns;
     
         if(args.count("header"))
             header = args["header"].as<std::size_t>();
@@ -230,7 +304,7 @@ int main(int argc, char ** argv)
             if(args.count("from-order"))
                 reverse = true;
             else
-                throw kmcomp::kmcomp_error("kmcomp", "main", "Cannot use 'reverse' option if no order was given with '--from-order'");
+                throw kmcomp::kmcomp_error("kmcomp", "main", "Cannot use '--reverse' option if no order was given with '--from-order'");
         }
 
         if(args.count("from-order"))
@@ -274,35 +348,7 @@ int main(int argc, char ** argv)
             if(error_factor < 0.0)
                 throw kmcomp::kmcomp_error("kmcomp", "main", "Option -e/--error-nn is out of range [0.0-inf[, got: '" + std::to_string(error_factor) + "'");
         }
-    } 
-    catch (const cxxopts::exceptions::exception& e)
-    {
-        usage();
-        std::cerr << kmcomp::error_str("kmcomp", "main", std::string(e.what())) << std::endl;
-        return 1;
-    }
-    catch (const kmcomp::kmcomp_error& e)
-    {
-        std::cerr << e.what() << std::endl;
-        return 2;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << kmcomp::error_str("kmcomp", "main", std::string{"Unhandled exception '"} + e.what() + "'");
-        return 2;
-    }
-
-    try
-    {
-        //Get file size to get the number of rows
-        int fd = open(input_path.c_str(), O_RDONLY); //Open matrix in read-only
-
-        if(fd < 0)
-            throw kmcomp::kmcomp_error("kmcomp", "main", "Open syscall failed on matrix '" + input_path + "'");
-
-        const std::size_t FILE_SIZE = lseek(fd, 0, SEEK_END);
-        close(fd);
-
+    
         //Compute block size according to the number of columns
         block_compressor::ConfigZstd config;
 
@@ -315,7 +361,8 @@ int main(int argc, char ** argv)
             target_block_size = config.get_block_size();
         }
 
-        const std::size_t ROW_LENGTH = (columns + 7) / 8;
+        const std::size_t FILE_SIZE = get_file_size(input_path);
+        const std::size_t ROW_LENGTH = columns / 8;
         const std::size_t NB_ROWS = (FILE_SIZE - header) / ROW_LENGTH;
 
         if(compress)
@@ -351,14 +398,7 @@ int main(int argc, char ** argv)
         //Compute order (or deserialize if given)
         if(deserialize_order)
         {
-            order.resize(config.get_elements_per_row());
-            fd = open(in_order_path.c_str(), O_RDONLY);
-
-            if(fd < 0)
-                throw kmcomp::kmcomp_error("kmcomp", "main", "Could not deserialize order file '" + in_order_path + "', open syscall failed");
-
-            read(fd, reinterpret_cast<char*>(order.data()), order.size()*sizeof(std::uint64_t));
-            close(fd);
+           get_order_from_file(in_order_path, order, columns);
         }
         else if(!no_reorder) //If reorder enabled and no order was given, compute it
         {
@@ -404,9 +444,8 @@ int main(int argc, char ** argv)
             reverse_order(order);
 
         if(decompress)
-            decompress_matrix(input_path, input_ef_path, header, target_block_size, output_path);
-
-        if(compress)
+            decompress_matrix(input_path, input_ef_path, header, config.get_block_size(), output_path);
+        else if(compress)
         {
             #ifdef KMCOMP_METRICS
             metrics["1_blocksize(bytes)"] = config.get_block_size();
@@ -414,40 +453,10 @@ int main(int argc, char ** argv)
             metrics["1_target_blocksize(bytes)"] = target_block_size;
             #endif
 
-            
-            block_compressor::CompressorZstd compressor(config.get_preset());
-            block_compressor::IntContainerRaw<std::uint64_t> int_container;
-            int_container.reserve(FILE_SIZE/config.get_block_size()+2);
-            block_compressor::BlockCompressor bc(output_path, config.get_block_size(), compressor, int_container);
-            if(no_reorder)
-            {
-                //Compress matrix
-                #ifdef KMCOMP_METRICS
-                START_TIMER;
-                #endif
-
-                int fd = open(input_path.c_str(), O_RDONLY);
-                const char* map = (const char*)mmap(nullptr, FILE_SIZE, PROT_READ, MAP_PRIVATE, fd, 0);
-                
-                bc.write_raw_data(map, header);
-                bc.append_data(map+header, FILE_SIZE-header);
-
-                munmap(const_cast<char*>(map), FILE_SIZE);
-                close(fd);
-
-                #ifdef KMCOMP_METRICS
-                END_TIMER;
-                metrics["3_time_compression(s)"] = GET_TIMER;
-                #endif
-            }
-            else 
-            {
-                //Reorder and compress matrix
-                kmcomp::reorder_matrix_columns_and_compress(input_path, header, columns, NB_ROWS, order, bc);
-            }
-
-            bc.close();
-            int_container.serialize_file(output_ef_path);
+           if(no_reorder)
+                compress_matrix(input_path, FILE_SIZE, header, config.get_block_size(), preset_level, output_path, output_ef_path);
+           else
+                reorder_and_compress_matrix(input_path, columns, NB_ROWS, FILE_SIZE, header, config.get_block_size(), preset_level, order, output_path, output_ef_path);
         }
         
         if(!no_reorder && !compress)
@@ -467,7 +476,7 @@ int main(int argc, char ** argv)
         //Serialize order
         if(serialize_order)
         {
-            fd = open(out_order_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            int fd = open(out_order_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
             if(fd < 0)
                 throw kmcomp::kmcomp_error("kmcomp", "main", "Couldn't serialize order, open syscall failed\n");
@@ -483,15 +492,22 @@ int main(int argc, char ** argv)
             json_out << std::setw(4) << metrics << std::endl;
         }
         #endif
+    
+    } 
+    catch (const cxxopts::exceptions::exception& e)
+    {
+        usage();
+        std::cerr << kmcomp::error_str("kmcomp", "main", std::string(e.what())) << std::endl;
+        return 1;
     }
-    catch(const kmcomp::kmcomp_error& e)
+    catch (const kmcomp::kmcomp_error& e)
     {
         std::cerr << e.what() << std::endl;
         return 2;
     }
-    catch(const std::exception& e)
+    catch (const std::exception& e)
     {
-        std::cerr << "Got an unhandled exception: " << e.what() << std::endl;
+        std::cerr << kmcomp::error_str("kmcomp", "main", std::string{"Unhandled exception '"} + e.what() + "'");
         return 2;
     }
 }
