@@ -43,8 +43,11 @@ int main(int argc, char ** argv)
     std::string in_order_path;
     std::string out_order_path;
     std::string config_path;
-    std::string json_path;
-    
+
+    #ifdef KMCOMP_METRICS
+    std::string json_path = "";
+    #endif
+
     unsigned preset_level = 3;
     
     double threshold = 0.0;
@@ -212,8 +215,6 @@ int main(int argc, char ** argv)
             std::cerr << kmcomp::warning_str("kmcomp", "main", "Option -j/--json specified but disabled at compilation. See README.\n");
             #endif
         }
-        else
-            json_path = "";
 
         if(args.count("no-reorder"))
         {
@@ -321,7 +322,7 @@ int main(int argc, char ** argv)
         {
             if(subsampled_rows > NB_ROWS)
             {
-                std::cerr << kmcomp::warning_str("kmcomp", "main", "Subsampled rows (" + std::to_string(subsampled_rows) + ") exceeds row count (" + std::to_string(NB_ROWS) + "). Clamping to " + std::to_string(NB_ROWS) + " rows.\n");
+                std::cerr << kmcomp::warning_str("kmcomp", "main", "Subsampled rows '" + std::to_string(subsampled_rows) + "' exceeds row count '" + std::to_string(NB_ROWS) + "'. Clamping to " + std::to_string(NB_ROWS) + " rows.\n");
                 subsampled_rows = NB_ROWS;
             }
 
@@ -471,7 +472,7 @@ int main(int argc, char ** argv)
         }
         #endif
     }
-    catch(kmcomp::kmcomp_error& e)
+    catch(const kmcomp::kmcomp_error& e)
     {
         std::cerr << e.what() << std::endl;
         return 2;
