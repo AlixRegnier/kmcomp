@@ -2,9 +2,9 @@
 #include <deque>
 #include <stdexcept>
 
-#include <tsp.hpp>
-
 #include <vptree.hpp>
+
+#include <kmcomp/tsp.hpp>
 
 #if defined(KMCOMP_USE_AVX2)
 #define KMCOMP_USE_SSE2 1

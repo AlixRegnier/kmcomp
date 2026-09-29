@@ -1,7 +1,7 @@
 include(FetchContent)
 
 set(BLOCK_COMPRESSOR_ENABLE_ZSTD ON CACHE BOOL
-    "Enable Zstd support in BlockCompressor" FORCE
+  "Enable Zstd support in block_compressor" FORCE
 )
 
 FetchContent_Declare(block_compressor

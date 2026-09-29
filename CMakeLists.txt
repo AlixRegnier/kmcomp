@@ -100,9 +100,8 @@ target_include_directories(kmcomp
 
 target_link_libraries(kmcomp
     PUBLIC
-        block_compressor_ext
+        block_compressor::zstd
         vptree_ext
-        external_zstd
 )
 
 if(KMCOMP_METRICS)
@@ -146,7 +145,6 @@ if(KMCOMP_BUILD_MAIN OR KMCOMP_METRICS)
         PRIVATE
             kmcomp::kmcomp
             cxxopts_ext
-            external_zstd
     )
 
     # JSON is needed only by the executable when metrics are enabled.

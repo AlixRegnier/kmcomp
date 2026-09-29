@@ -7,8 +7,9 @@
 #include <emmintrin.h>
 #endif
 
-#include <kmcomp.hpp>
-#include <tsp.hpp>
+#include <kmcomp/error.hpp>
+#include <kmcomp/kmcomp.hpp>
+#include <kmcomp/tsp.hpp>
 
 #define GET_ROW_PTR(x) (mapped_file+HEADER+((std::size_t)(x))*ROW_LENGTH)
 #define GET_BLOCK_PTR(x) (mapped_file+HEADER+((std::size_t)(x))*BLOCK_SIZE)
@@ -33,7 +34,7 @@ namespace kmcomp
         } tmp;
 
         if(nrows % 8 != 0 || ncols % 8 != 0)
-            throw std::invalid_argument("[ERROR] kmcomp::__sse2_trans : Number of columns and of rows must be both multiple of 8.");
+            throw kmcomp_error("kmcomp", "__sse2_trans", "Number of columns and of rows must be both multiple of 8.");
 
         // Do the main body in 16x8 blocks:
         for ( rr = 0; rr + 16 <= nrows; rr += 16 )
@@ -102,7 +103,7 @@ namespace kmcomp
     void __sse2_trans(std::uint8_t const *inp, std::uint8_t *out, long nrows, long ncols)
     {
         if(nrows % 8 != 0 || ncols % 8 != 0)
-            throw std::invalid_argument("[ERROR] kmcomp::__sse2_trans : Number of columns and of rows must be both multiple of 8.");
+            throw kmcomp_error("kmcomp", "__sse2_trans", "Number of columns and of rows must be both multiple of 8.");
 
         const long ncols_bytes = ncols / 8;
         const long nrows_bytes = nrows / 8;
@@ -149,7 +150,7 @@ namespace kmcomp
     {
         int fd = open(MATRIX_PATH.c_str(), O_RDONLY); 
         if(fd < 0)
-            throw std::runtime_error("[ERROR] kmcomp::compute_order_from_matrix_columns : Failed to open a file descriptor on reference matrix.");
+            throw kmcomp_error("kmcomp", "compute_order_from_matrix_columns", "Failed to open a file descriptor on reference matrix.");
 
         const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
         const std::size_t FILE_SIZE = HEADER + ROW_LENGTH * NB_ROWS;
@@ -163,13 +164,13 @@ namespace kmcomp
             subsampled_rows = NB_ROWS / 8 * 8;
 
         if(subsampled_rows > NB_ROWS)
-            throw std::invalid_argument("[ERROR] kmcomp::compute_order_from_matrix_columns : Number of subsampled rows can't be greater to the number of rows in the binary matrix. Maybe one of the parameters is wrong ?");
+            throw kmcomp_error("kmcomp", "compute_order_from_matrix_columns", "Number of subsampled rows can't be greater to the number of rows in the binary matrix. Maybe one of the parameters is wrong ?");
 
         if(subsampled_rows % 8 != 0)
-            throw std::invalid_argument("[ERROR] kmcomp::compute_order_from_matrix_columns : Number of subsampled rows is not a multiple of 8. Maybe your matrix has less than 8 rows ?");
+            throw kmcomp_error("kmcomp", "compute_order_from_matrix_columns", "Number of subsampled rows is not a multiple of 8. Maybe your matrix has less than 8 rows ?");
 
         if(groupsize % 8 != 0)
-            throw std::invalid_argument("[ERROR] kmcomp::compute_order_from_matrix_columns : The size of a group of columns must be a multiple of 8 (for transposition).");
+            throw kmcomp_error("kmcomp", "compute_order_from_matrix_columns", "The size of a group of columns must be a multiple of 8 (for transposition).");
 
         if(groupsize == 0 || groupsize > ROW_LENGTH*8)
             groupsize = ROW_LENGTH * 8;
@@ -341,10 +342,10 @@ namespace kmcomp
         close(fd);
 
         if(read_bytes == -1)
-            throw std::runtime_error("[ERROR] kmcomp::get_entropy_ratio : An error occured while trying to read input matrix.");
+            throw kmcomp_error("kmcomp", "get_entropy_ratio", "An error occured while trying to read input matrix.");
 
         if(read_bytes % ROW_LENGTH != 0)
-            throw std::runtime_error("[ERROR] kmcomp::get_entropy_ratio : Input matrix size is not a multiple of the size of a row.");
+            throw kmcomp_error("kmcomp", "get_entropy_ratio", "Input matrix size is not a multiple of the size of a row.");
 
         double entropy_original = get_block_entropy(buffered_block, read_bytes, count_bytes_original);
         reorder_block(buffered_block, transposed_block, buffered_block, read_bytes, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
@@ -406,7 +407,7 @@ namespace kmcomp
         char * mapped_file = (char*)mmap(nullptr, FILE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
         if(mapped_file == MAP_FAILED)
-            throw std::runtime_error("[ERROR] kmcomp::reorder_matrix_columns : mmap() failed for reordering matrix.");
+            throw kmcomp_error("kmcomp", "reorder_matrix_columns", "mmap() failed for reordering matrix.");
 
         //Tell system that data will be accessed sequentially
         posix_madvise(mapped_file, FILE_SIZE, POSIX_MADV_SEQUENTIAL);
@@ -472,7 +473,7 @@ namespace kmcomp
         char * mapped_file = (char*)mmap(nullptr, FILE_SIZE, PROT_READ, MAP_PRIVATE, fd, 0);
 
         if(mapped_file == MAP_FAILED)
-            throw std::runtime_error("[ERROR] kmcomp::reorder_matrix_columns_and_compress : mmap() initialization failed for reordering matrix.");
+            throw kmcomp_error("kmcomp", "reorder_matrix_columns_and_compress", "mmap() initialization failed for reordering matrix.");
 
         //Tell system that data will be accessed sequentially
         posix_madvise(mapped_file, FILE_SIZE, POSIX_MADV_SEQUENTIAL);
@@ -554,23 +555,23 @@ namespace kmcomp
     {
         std::vector<bool> visited;
         visited.resize(ORDER.size());
-    
+
         //Process each cycle in the permutation
         for (std::size_t i = 0; i < ORDER.size(); ++i) 
         {
             if (visited[i]) 
                 continue;
-            
+
             //Start of a new cycle
             std::size_t current = i;
             std::memcpy(row_buffer, GET_ROW_PTR(i), ROW_LENGTH);
-            
+
             //Follow the cycle
             while (!visited[current]) 
             {
                 visited[current] = true;
                 std::size_t next = ORDER[current];
-                
+
                 if (next == i) 
                 {
                     //End of cycle - place the temp value
