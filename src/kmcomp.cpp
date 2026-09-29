@@ -316,10 +316,10 @@ namespace kmcomp
         const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
 
         //Compute the number of rows in a block and round to next multiple of 8
-        const std::size_t BLOCK_NB_ROWS = target_block_nb_rows(NB_COLS, SAMPLED_BYTES);
+        const std::size_t BLOCK_NB_ROWS = target_transp_block_nb_rows(NB_COLS, SAMPLED_BYTES);
 
         //Block size will most of time be slightly bigger than targeted size
-        const std::size_t BLOCK_SIZE = target_block_size(NB_COLS, SAMPLED_BYTES);
+        const std::size_t BLOCK_SIZE = target_transp_block_size(NB_COLS, SAMPLED_BYTES);
 
         //Compute last block size
         std::size_t last_block_size = (NB_ROWS % BLOCK_NB_ROWS) * ROW_LENGTH;
@@ -347,10 +347,11 @@ namespace kmcomp
         if(read_bytes % ROW_LENGTH != 0)
             throw kmcomp_error("kmcomp", "get_entropy_ratio", "Input matrix size is not a multiple of the size of a row.");
 
+        char* row_buffer = new char[ROW_LENGTH];
         double entropy_original = get_block_entropy(buffered_block, read_bytes, count_bytes_original);
-        reorder_block(buffered_block, transposed_block, buffered_block, read_bytes, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+        reorder_block(buffered_block, transposed_block, buffered_block, row_buffer, read_bytes, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
         double entropy_reordered = get_block_entropy(buffered_block, read_bytes, count_bytes_reordered);
-
+        delete[] row_buffer;
         KMCOMP_DELETE_MATRIX(buffered_block);
         KMCOMP_DELETE_MATRIX(transposed_block);
 

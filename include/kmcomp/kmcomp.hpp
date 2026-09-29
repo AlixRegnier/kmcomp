@@ -36,11 +36,6 @@ extern nlohmann::json metrics;
 
 namespace kmcomp
 {
-    std::size_t target_transp_block_nb_rows(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE);
-    
-    std::size_t target_transp_block_size(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE);
-
-    
     #ifdef KMCOMP_METRICS
     double get_entropy_ratio(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, std::size_t SAMPLED_BYTES = 8388608);
     #endif
