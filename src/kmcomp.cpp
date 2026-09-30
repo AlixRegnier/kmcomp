@@ -129,7 +129,7 @@ namespace kmcomp
 #undef II
 #undef OUT
 #undef INP
-    
+
     std::size_t target_transp_block_nb_rows(const std::size_t NB_COLS, const std::size_t BLOCK_TARGET_SIZE)
     {
         const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
@@ -149,6 +149,7 @@ namespace kmcomp
     double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, std::size_t groupsize, std::size_t subsampled_rows, std::vector<std::uint64_t>& order, double error_factor)
     {
         int fd = open(MATRIX_PATH.c_str(), O_RDONLY); 
+
         if(fd < 0)
             throw kmcomp_error("kmcomp", "compute_order_from_matrix_columns", "Failed to open a file descriptor on reference matrix.");
 
@@ -326,10 +327,14 @@ namespace kmcomp
         if(last_block_size == 0)
             last_block_size = BLOCK_SIZE; //Each blocks are full, so last is full
 
-        char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
-        char * transposed_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
 
         int fd = open(MATRIX_PATH.c_str(), O_RDONLY);
+
+        if(fd < 0)
+            throw kmcomp_error("kmcomp", "get_entropy_ratio", "Failed to open a file descriptor on reference matrix.");
+
+        char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
+        char * tmp_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
 
         //Skip header
         lseek(fd, HEADER, SEEK_SET);
@@ -342,44 +347,48 @@ namespace kmcomp
         close(fd);
 
         if(read_bytes == -1)
+        {
+            KMCOMP_DELETE_MATRIX(buffered_block);
+            KMCOMP_DELETE_MATRIX(tmp_block);
             throw kmcomp_error("kmcomp", "get_entropy_ratio", "An error occured while trying to read input matrix.");
+        }
 
         if(read_bytes % ROW_LENGTH != 0)
+        {
+            KMCOMP_DELETE_MATRIX(buffered_block);
+            KMCOMP_DELETE_MATRIX(tmp_block);
             throw kmcomp_error("kmcomp", "get_entropy_ratio", "Input matrix size is not a multiple of the size of a row.");
+        }
 
         char* row_buffer = new char[ROW_LENGTH];
         double entropy_original = get_block_entropy(buffered_block, read_bytes, count_bytes_original);
-        reorder_block(buffered_block, transposed_block, buffered_block, row_buffer, read_bytes, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+        reorder_block(buffered_block, tmp_block, row_buffer, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
         double entropy_reordered = get_block_entropy(buffered_block, read_bytes, count_bytes_reordered);
         delete[] row_buffer;
         KMCOMP_DELETE_MATRIX(buffered_block);
-        KMCOMP_DELETE_MATRIX(transposed_block);
+        KMCOMP_DELETE_MATRIX(tmp_block);
 
         return entropy_original / entropy_reordered;
     }
 
     #endif
 
-    void reorder_block(const char * input_block, char * tmp_block, char * output_block, char * row_buffer, const std::size_t BLOCK_SIZE, const std::size_t BLOCK_NB_ROWS, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER)
+    void reorder_block(char * block, char * tmp_block, char * row_buffer, const std::size_t BLOCK_NB_ROWS, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER)
     {
-        //Copy block from disk to memory
-        if(input_block != output_block)
-            std::memcpy(output_block, input_block, BLOCK_SIZE);
-
         //Transpose matrix block
-        __sse2_trans(reinterpret_cast<const std::uint8_t*>(output_block), reinterpret_cast<std::uint8_t*>(tmp_block), BLOCK_NB_ROWS, ROW_LENGTH*8);
+        __sse2_trans(reinterpret_cast<const std::uint8_t*>(block), reinterpret_cast<std::uint8_t*>(tmp_block), BLOCK_NB_ROWS, ROW_LENGTH*8);
 
         //Reorder block columns (by reordering transposed block rows)
         reorder_matrix_rows(tmp_block, row_buffer, 0, BLOCK_NB_ROWS/8, ORDER);
 
         //Transpose matrix block back
-        __sse2_trans(reinterpret_cast<const std::uint8_t*>(tmp_block), reinterpret_cast<std::uint8_t*>(output_block), ROW_LENGTH*8, BLOCK_NB_ROWS);
+        __sse2_trans(reinterpret_cast<const std::uint8_t*>(tmp_block), reinterpret_cast<std::uint8_t*>(block), ROW_LENGTH*8, BLOCK_NB_ROWS);
     }
 
     void reorder_matrix_columns(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER)
     {
         constexpr std::size_t TARGET_BLOCK_SIZE = 1 << 21; // 2 MiB
-        
+
         //Get row length in bytes
         const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
 
@@ -400,15 +409,23 @@ namespace kmcomp
         if(last_block_size == 0)
             last_block_size = BLOCK_SIZE; //Each blocks are full, so last is full
 
-        char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
-        char * transposed_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
-        char * row_buffer = new char[ROW_LENGTH];
-
         int fd = open(MATRIX_PATH.c_str(), O_RDWR);
+
+        if(fd < 0)
+            throw kmcomp_error("kmcomp", "reorder_matrix_columns", "Open syscall failed to open '" + MATRIX_PATH + "'");
+
         char * mapped_file = (char*)mmap(nullptr, FILE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
         if(mapped_file == MAP_FAILED)
+        {
+            close(fd);
             throw kmcomp_error("kmcomp", "reorder_matrix_columns", "mmap() failed for reordering matrix.");
+        }
+
+        alignas(64) char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
+        alignas(64) char * tmp_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
+
+        char * row_buffer = new char[ROW_LENGTH];
 
         //Tell system that data will be accessed sequentially
         posix_madvise(mapped_file, FILE_SIZE, POSIX_MADV_SEQUENTIAL);
@@ -416,35 +433,41 @@ namespace kmcomp
         std::size_t i = 0;
         for(; i + 1 < NB_BLOCKS; ++i)
         {
+            //Copy block from disk to memory
+            std::memcpy(buffered_block, GET_BLOCK_PTR(i), BLOCK_SIZE);
+
             //Reorder block
-            reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, row_buffer, BLOCK_SIZE, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+            reorder_block(buffered_block, tmp_block, row_buffer, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
 
             //Copy block from memory to disk
             std::memcpy(GET_BLOCK_PTR(i), buffered_block, BLOCK_SIZE);
         }
 
+        //Copy last block from disk to memory
+        std::memcpy(buffered_block, GET_BLOCK_PTR(i), last_block_size);
+
         //Reorder last block
-        reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, row_buffer, last_block_size, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+        reorder_block(buffered_block, tmp_block, row_buffer, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
 
         //Copy last block from memory to disk 
         std::memcpy(GET_BLOCK_PTR(i), buffered_block, last_block_size);
 
         KMCOMP_DELETE_MATRIX(buffered_block);
-        KMCOMP_DELETE_MATRIX(transposed_block);
+        KMCOMP_DELETE_MATRIX(tmp_block);
         delete[] row_buffer;
 
         munmap(mapped_file, FILE_SIZE);
         close(fd);
     }
 
-    void reorder_matrix_columns_and_compress(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, block_compressor::BlockCompressor& block_compr)
+    void picompress(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, block_compressor::BlockCompressor& block_compr)
     {
         #ifdef KMCOMP_METRICS
         DECLARE_TIMER;
         #endif
 
         constexpr std::size_t TARGET_BLOCK_SIZE = 1 << 21; // 2 MiB
-        
+
         //Get row length in bytes
         const std::size_t ROW_LENGTH = (NB_COLS + 7) / 8;
 
@@ -464,17 +487,19 @@ namespace kmcomp
         if(last_block_size == 0)
             last_block_size = BLOCK_SIZE; //Each blocks are full, so last is full
 
-        char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
-        char * transposed_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
-        char * row_buffer = new char[ROW_LENGTH];
-
         int fd = open(MATRIX_PATH.c_str(), O_RDONLY);
+
+        if(fd < 0)
+            throw kmcomp_error("kmcomp", "picompress", "Open syscall failed to open '" + MATRIX_PATH + "'");
 
         //Since no modifications will be applied to original matrix, open it with MAP_PRIVATE mode
         char * mapped_file = (char*)mmap(nullptr, FILE_SIZE, PROT_READ, MAP_PRIVATE, fd, 0);
 
         if(mapped_file == MAP_FAILED)
-            throw kmcomp_error("kmcomp", "reorder_matrix_columns_and_compress", "mmap() initialization failed for reordering matrix.");
+        {
+            close(fd);
+            throw kmcomp_error("kmcomp", "picompress", "mmap() initialization failed for reordering matrix.");
+        }
 
         //Tell system that data will be accessed sequentially
         posix_madvise(mapped_file, FILE_SIZE, POSIX_MADV_SEQUENTIAL);
@@ -492,6 +517,10 @@ namespace kmcomp
         time_compression += __integral_time;
         #endif
 
+        alignas(64) char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
+        alignas(64) char * tmp_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
+        char * row_buffer = new char[ROW_LENGTH];
+
         std::size_t i = 0;
         //Process each blocks except the last
         for(; i + 1 < NB_BLOCKS; ++i)
@@ -499,7 +528,13 @@ namespace kmcomp
             #ifdef KMCOMP_METRICS
             START_TIMER;
             #endif
-            reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, row_buffer, BLOCK_SIZE, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+
+            //Copy block from disk to memory
+            std::memcpy(buffered_block, GET_BLOCK_PTR(i), BLOCK_SIZE);
+
+            //Reorder block
+            reorder_block(buffered_block, tmp_block, row_buffer, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+
             #ifdef KMCOMP_METRICS
             END_TIMER;
             time_reorder += __integral_time;
@@ -520,8 +555,12 @@ namespace kmcomp
         START_TIMER;
         #endif
 
-        //Handle last block that may be smaller, only block effective size differs
-        reorder_block(GET_BLOCK_PTR(i), transposed_block, buffered_block, row_buffer, last_block_size, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+        //Copy last block from disk to memory
+        std::memcpy(buffered_block, GET_BLOCK_PTR(i), last_block_size);
+
+        //Reorder last block
+        reorder_block(buffered_block, tmp_block, row_buffer, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
+
         #ifdef KMCOMP_METRICS
         END_TIMER;
         time_reorder += __integral_time;
@@ -544,7 +583,7 @@ namespace kmcomp
         #endif
 
         KMCOMP_DELETE_MATRIX(buffered_block);
-        KMCOMP_DELETE_MATRIX(transposed_block);
+        KMCOMP_DELETE_MATRIX(tmp_block);
         delete[] row_buffer;
 
         munmap(mapped_file, FILE_SIZE);
