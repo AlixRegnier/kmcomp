@@ -19,6 +19,8 @@
 nlohmann::json metrics;
 #endif
 
+#define INT_CONTAINER_EXT ".ef"
+
 void usage()
 {
     std::cerr << \
@@ -135,7 +137,7 @@ inline void write_order_to_file(const std::string& out_order_path, const std::ve
     close(fd);
 }
 
-inline void compress_matrix(const std::string& input_path, std::size_t file_size, std::size_t header_size, std::size_t block_size, std::size_t preset, const std::string& output_path, const std::string& output_ef_path)
+inline void compress_matrix(const std::string& input_path, std::size_t file_size, std::size_t header_size, std::size_t block_size, std::int64_t preset, const std::string& output_path, const std::string& output_ef_path)
 {
     block_compressor::CompressorZstd compressor(preset);
     block_compressor::IntContainerRaw<std::uint64_t> int_container;
@@ -195,7 +197,7 @@ int main(int argc, char ** argv)
     std::string json_path = "";
     #endif
 
-    unsigned preset_level = 3;
+    std::int64_t preset_level = 3;
 
     double threshold = 0.0;
     double error_factor = 0.0;
@@ -230,7 +232,7 @@ int main(int argc, char ** argv)
             ("h,help", "Print help.")
             ("i,input", "Input matrix file path.", cxxopts::value<std::string>())
             ("n,no-reorder", "No reorder")
-            ("p,preset", "Require '--compress-to'. Compression preset level [1-22] {3}.", cxxopts::value<unsigned>())
+            ("p,preset", "Require '--compress-to'. Compression preset level [-7,22] {3}.", cxxopts::value<int>())
             ("r,reverse", "Require '-f'. Invert permutation (retrieve original matrix).")
             ("s,subsample-size", "Number of rows to use for distance computation {10000}.", cxxopts::value<std::size_t>())
             ("threshold", "Reorder only if permutation would improve compression more than given percent (%).", cxxopts::value<short>())
@@ -251,94 +253,14 @@ int main(int argc, char ** argv)
             return 0;
         }
 
-        // Check required argument
         if (!args.count("input"))
             throw kmcomp::kmcomp_error("kmcomp", "main", "-i/--input is required");
 
-        // Get required argument
         input_path = args["input"].as<std::string>();
 
         // Validate that index path exists and is a directory
         if (!std::filesystem::exists(input_path)) 
             throw kmcomp::kmcomp_error("kmcomp", "main", "Input matrix '" + input_path + "' does not exist");
-
-        if (!args.count("columns"))
-            throw kmcomp::kmcomp_error("kmcomp", "main", "Number of columns required");
-
-        columns = (args["columns"].as<std::size_t>() + 7) / 8 * 8;
-
-        // Get optional arguments
-        if (args.count("group-size"))
-            groupsize = args["group-size"].as<std::size_t>();
-        else
-            groupsize = columns;
-    
-        if(args.count("header"))
-            header = args["header"].as<std::size_t>();
-
-        if (args.count("subsample-size"))
-            subsampled_rows = args["subsample-size"].as<std::size_t>();
-
-        if(args.count("compress-to") && args.count("decompress-to"))
-            throw kmcomp::kmcomp_error("kmcomp", "main", "Options '-z' (--compress-to) and '-d' (--decompress-to) are mutually exclusives.\n");
-
-        if (args.count("compress-to"))
-        {
-            output_path = args["compress-to"].as<std::string>();
-            output_ef_path = output_path + ".ef";
-            compress = true;
-
-            if(args.count("preset"))
-                preset_level = args["preset"].as<unsigned>();
-
-            if(preset_level < 1 || preset_level > 22)
-                throw kmcomp::kmcomp_error("kmcomp", "main", "Compression preset level is out of range [1-22], got: '" + std::to_string(preset_level) + "'");
-
-            if (args.count("config-path"))
-                config_path = args["config-path"].as<std::string>();
-            else
-                throw kmcomp::kmcomp_error("kmcomp", "main", "'--config-path' option is mandatory with option '-z' (--compress-to)");
-        }
-
-        if(args.count("decompress-to"))
-        {
-            output_path = args["decompress-to"].as<std::string>();
-            input_ef_path = input_path + ".ef";
-            decompress = true;
-
-            if(args.count("config-path"))
-                config_path = args["config-path"].as<std::string>();
-            else
-                throw kmcomp::kmcomp_error("kmcomp", "main", "'--config-path' option is mandatory with option '-d' (--decompress-to).\n");
-        }
-
-        if(args.count("reverse"))
-        {
-            if(args.count("from-order"))
-                reverse = true;
-            else
-                throw kmcomp::kmcomp_error("kmcomp", "main", "Cannot use '--reverse' option if no order was given with '--from-order'");
-        }
-
-        if(args.count("from-order"))
-        {
-            in_order_path = args["from-order"].as<std::string>();
-            deserialize_order = true;
-        }
-
-        if(args.count("to-order"))
-        {
-            out_order_path = args["to-order"].as<std::string>();
-            serialize_order = true;
-        }
-
-        if(args.count("block-size"))
-            target_block_size = args["block-size"].as<std::size_t>();
-
-        #ifndef KMCOMP_METRICS
-        if(args.count("json"))
-            std::cerr << kmcomp::warning_str("kmcomp", "main", "Option -j/--json specified but disabled at compilation. See README.\n");
-        #endif
 
         if(args.count("no-reorder"))
         {
@@ -347,6 +269,113 @@ int main(int argc, char ** argv)
             serialize_order = false;
             reverse = false;
         }
+
+        if(args.count("compress-to") && args.count("decompress-to"))
+            throw kmcomp::kmcomp_error("kmcomp", "main", "Options '-z' (--compress-to) and '-d' (--decompress-to) are mutually exclusive");
+
+        if(!args.count("compress-to") && !args.count("decompress-to") && !reorder)
+            throw kmcomp::kmcomp_error("kmcomp", "main", "Current set of given parameters would do nothing");
+
+        if (!args.count("columns"))
+            throw kmcomp::kmcomp_error("kmcomp", "main", "The number of columns is required, use parameter '-c' (--columns)");
+
+        columns = (args["columns"].as<std::size_t>() + 7) / 8 * 8;
+
+        // Get optional arguments
+        if(args.count("group-size"))
+        {
+            groupsize = args["group-size"].as<std::size_t>();
+
+            if(args.count("from-order") || !reorder)
+                std::cerr << kmcomp::warning_str("kmcomp", "main", "Option '-g' (--group-size) is ignored according to given parameters\n");
+        }
+        else
+            groupsize = columns;
+
+        if(args.count("header"))
+            header = args["header"].as<std::size_t>();
+
+        if(args.count("subsample-size"))
+        {
+            subsampled_rows = args["subsample-size"].as<std::size_t>();
+
+            if(args.count("from-order") || !reorder)
+                std::cerr << kmcomp::warning_str("kmcomp", "main", "Option '-s' (--subsample-size) is ignored according to given parameters\n");
+            else if(subsampled_rows == 0)
+                throw kmcomp::kmcomp_error("kmcomp", "main", "The number of subsampled rows must be greater than zero, got: '" + std::to_string(subsampled_rows) + "'");
+        }
+
+        if(args.count("preset"))
+        {
+            preset_level = args["preset"].as<int>();
+
+            if(!args.count("compress-to"))
+                std::cerr << kmcomp::warning_str("kmcomp", "main", "Option '-p' (--preset) is ignored according to given parameters\n");
+            else if(preset_level < -7 || preset_level > 22)
+                throw kmcomp::kmcomp_error("kmcomp", "main", "Compression preset level is out of range [-7,22], got: '" + std::to_string(preset_level) + "'");
+        }
+
+        if(args.count("config-path"))
+            config_path = args["config-path"].as<std::string>();
+
+        if (args.count("compress-to"))
+        {
+            output_path = args["compress-to"].as<std::string>();
+            output_ef_path = output_path + INT_CONTAINER_EXT;
+            compress = true;
+
+            if(!args.count("config-path"))
+                throw kmcomp::kmcomp_error("kmcomp", "main", "Option '--config-path' is mandatory with option '-z' (--compress-to)");
+        }
+
+        if(args.count("decompress-to"))
+        {
+            output_path = args["decompress-to"].as<std::string>();
+            input_ef_path = input_path + INT_CONTAINER_EXT;
+            decompress = true;
+
+            if(!args.count("config-path"))
+                throw kmcomp::kmcomp_error("kmcomp", "main", "Option '--config-path' is mandatory with option '-d' (--decompress-to)");
+        }
+
+        if(args.count("reverse"))
+        {
+            if(args.count("from-order"))
+                reverse = true;
+            else
+                throw kmcomp::kmcomp_error("kmcomp", "main", "Option '-r' (--reverse) can only be used with option '-f' (--from-order)");
+        }
+
+        if(args.count("from-order"))
+        {
+            in_order_path = args["from-order"].as<std::string>();
+
+            if(args.count("compress-to") || args.count("decompress-to") && args.count("reverse"))
+            deserialize_order = true;
+        }
+
+        if(args.count("to-order"))
+        {
+            out_order_path = args["to-order"].as<std::string>();
+
+            if(args.count("compress-to"))
+                serialize_order = true;
+            else
+                std::cerr << kmcomp::warning_str("kmcomp", "main", "Option '-t' (--to-order) is ignored according to given parameters\n");
+        }
+
+        if(args.count("block-size"))
+        {
+            if(args.count("compress-to"))
+                target_block_size = args["block-size"].as<std::size_t>();
+            else
+                std::cerr << kmcomp::warning_str("kmcomp", "main", "Option '-b' (--block-size) is ignored according to given parameters\n");
+        }
+
+        #ifndef KMCOMP_METRICS
+        if(args.count("json"))
+            std::cerr << kmcomp::warning_str("kmcomp", "main", "Option '-j' (--json) was specified but is disabled. See README\n");
+        #endif
 
         if(args.count("threshold"))
         {
@@ -359,9 +388,9 @@ int main(int argc, char ** argv)
             error_factor = args["epsilon"].as<double>();
 
             if(error_factor < 0.0)
-                throw kmcomp::kmcomp_error("kmcomp", "main", "Option -e/--error-nn is out of range [0.0-inf[, got: '" + std::to_string(error_factor) + "'");
+                throw kmcomp::kmcomp_error("kmcomp", "main", "Option -e/--epsilon is out of range [0.0,inf[, got: '" + std::to_string(error_factor) + "'");
         }
-    
+
         //Compute block size according to the number of columns
         block_compressor::ConfigZstd config;
 
@@ -377,6 +406,9 @@ int main(int argc, char ** argv)
         const std::size_t FILE_SIZE = get_file_size(input_path);
         const std::size_t ROW_LENGTH = columns / 8;
         const std::size_t NB_ROWS = (FILE_SIZE - header) / ROW_LENGTH;
+
+        if(!decompress && (FILE_SIZE - header - NB_ROWS * ROW_LENGTH != 0))
+            throw kmcomp::kmcomp_error("kmcomp", "main", "Matrix size does not match parameters. Header or columns parameter may be wrong ?");
 
         if(compress)
         {
@@ -413,7 +445,7 @@ int main(int argc, char ** argv)
         {
            read_order_from_file(in_order_path, order, columns);
         }
-        else if(reorder) //If reorder enabled and no order was given, compute it
+        else if(reorder && !decompress) //If reorder enabled and no order was given, compute it
         {
             if(subsampled_rows > NB_ROWS)
             {
@@ -503,11 +535,6 @@ int main(int argc, char ** argv)
     catch (const kmcomp::kmcomp_error& e)
     {
         std::cerr << e.what() << std::endl;
-        return 2;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << kmcomp::error_str("kmcomp", "main", std::string{"Unhandled exception '"} + e.what() + "'");
         return 2;
     }
 }
