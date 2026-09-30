@@ -358,7 +358,7 @@ int main(int argc, char ** argv)
         {
             out_order_path = args["to-order"].as<std::string>();
 
-            if(args.count("compress-to"))
+            if(args.count("compress-to") && !args.count("no-reorder"))
                 serialize_order = true;
             else
                 std::cerr << kmcomp::warning_str("kmcomp", "main", "Option '-t' (--to-order) is ignored according to given parameters\n");
@@ -535,6 +535,11 @@ int main(int argc, char ** argv)
     catch (const kmcomp::kmcomp_error& e)
     {
         std::cerr << e.what() << std::endl;
+        return 2;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << kmcomp::error_str("kmcomp", "main", "Got unhandled exception: '") << e.what() << "'" << std::endl;
         return 2;
     }
 }
