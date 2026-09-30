@@ -262,6 +262,12 @@ int main(int argc, char ** argv)
         if (!std::filesystem::exists(input_path)) 
             throw kmcomp::kmcomp_error("kmcomp", "main", "Input matrix '" + input_path + "' does not exist");
 
+        if(args.count("compress-to") && args.count("decompress-to"))
+            throw kmcomp::kmcomp_error("kmcomp", "main", "Options '-z' (--compress-to) and '-d' (--decompress-to) are mutually exclusive");
+
+        if(args.count("no-reorder") && args.count("from-order"))
+            throw kmcomp::kmcomp_error("kmcomp", "main", "Options '-f' (--from-order) and '-n' (--no-reorder) are mutually exclusive");
+    
         if(args.count("no-reorder"))
         {
             reorder = false;
@@ -269,9 +275,6 @@ int main(int argc, char ** argv)
             serialize_order = false;
             reverse = false;
         }
-
-        if(args.count("compress-to") && args.count("decompress-to"))
-            throw kmcomp::kmcomp_error("kmcomp", "main", "Options '-z' (--compress-to) and '-d' (--decompress-to) are mutually exclusive");
 
         if(!args.count("compress-to") && !args.count("decompress-to") && !reorder)
             throw kmcomp::kmcomp_error("kmcomp", "main", "Current set of given parameters would do nothing");
@@ -349,8 +352,6 @@ int main(int argc, char ** argv)
         if(args.count("from-order"))
         {
             in_order_path = args["from-order"].as<std::string>();
-
-            if(args.count("compress-to") || args.count("decompress-to") && args.count("reverse"))
             deserialize_order = true;
         }
 
@@ -358,7 +359,7 @@ int main(int argc, char ** argv)
         {
             out_order_path = args["to-order"].as<std::string>();
 
-            if(args.count("compress-to") && !args.count("no-reorder"))
+            if(!args.count("decompress-to") && !args.count("no-reorder"))
                 serialize_order = true;
             else
                 std::cerr << kmcomp::warning_str("kmcomp", "main", "Option '-t' (--to-order) is ignored according to given parameters\n");
@@ -443,7 +444,7 @@ int main(int argc, char ** argv)
         //Compute order (or deserialize if given)
         if(deserialize_order)
         {
-           read_order_from_file(in_order_path, order, columns);
+            read_order_from_file(in_order_path, order, columns);
         }
         else if(reorder && !decompress) //If reorder enabled and no order was given, compute it
         {
