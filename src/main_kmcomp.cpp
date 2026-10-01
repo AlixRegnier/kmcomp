@@ -207,7 +207,7 @@ int main(int argc, char ** argv)
     std::size_t columns;
     std::size_t target_block_size = 65536; //64 KiB
 
-    std::size_t header = 0;
+    std::size_t header_size = 0;
 
     bool compress = false;
     bool decompress = false;
@@ -299,7 +299,7 @@ int main(int argc, char ** argv)
             groupsize = columns;
 
         if(args.count("header"))
-            header = args["header"].as<std::size_t>();
+            header_size = args["header"].as<std::size_t>();
 
         if(args.count("subsample-size"))
         {
@@ -387,14 +387,19 @@ int main(int argc, char ** argv)
         {
             user_threshold = true;
             threshold = args["threshold"].as<short>() / 100.0;
+
+            if(args.count("from-order") || !reorder)
+                std::cerr << kmcomp::warning_str("kmcomp", "main", "Option '--threshold' is ignored according to given parameters\n");
         }
 
         if(args.count("epsilon"))
         {
             error_factor = args["epsilon"].as<double>();
 
-            if(error_factor < 0.0)
-                throw kmcomp::kmcomp_error("kmcomp", "main", "Option -e/--epsilon is out of range [0.0,inf[, got: '" + std::to_string(error_factor) + "'");
+            if(args.count("from-order") || !reorder)
+                std::cerr << kmcomp::warning_str("kmcomp", "main", "Option '-e' (--epsilon) is ignored according to given parameters\n");
+            else if(error_factor < 0.0)
+                throw kmcomp::kmcomp_error("kmcomp", "main", "Option '-e' (--epsilon) is out of range [0.0,inf[, got: '" + std::to_string(error_factor) + "'");
         }
 
         if(args.count("verbose"))
@@ -408,7 +413,7 @@ int main(int argc, char ** argv)
             LOG(kmcomp::log_str("kmcomp", "main", "Deserializing configuration file... "));
             config.import_config_file(config_path);
             columns = config.get_elements_per_row();
-            header = config.get_header_size();
+            header_size = config.get_header_size();
             preset_level = config.get_preset();
             target_block_size = config.get_block_size();
             LOG("DONE\n");
@@ -416,9 +421,9 @@ int main(int argc, char ** argv)
 
         std::size_t row_length = columns / 8;
         std::size_t input_file_size = get_file_size(input_path);
-        std::size_t nb_rows = (input_file_size - header) / row_length;
+        std::size_t nb_rows = (input_file_size - header_size) / row_length;
 
-        if(!decompress && (input_file_size - header - nb_rows * row_length != 0))
+        if(!decompress && (input_file_size - header_size - nb_rows * row_length != 0))
             throw kmcomp::kmcomp_error("kmcomp", "main", "Matrix size does not match parameters. Header or columns parameter may be wrong ?");
 
         if(compress)
@@ -427,7 +432,7 @@ int main(int argc, char ** argv)
             config.set_preset(preset_level);
             config.set_bits_per_element(1, false);
             config.set_elements_per_row(columns, false);
-            config.set_header_size(header);
+            config.set_header_size(header_size);
             config.target_block_size(target_block_size);
             config.export_config_file(config_path);
             LOG("DONE\n");
@@ -457,13 +462,13 @@ int main(int argc, char ** argv)
             double metric;
             KMCOMP_TIMED_BLOCK(
                 "3_time_permutation(s)",
-                metric = kmcomp::compute_order_from_matrix_columns(input_path, header, columns, nb_rows, groupsize, subsampled_rows, order, error_factor)
+                metric = kmcomp::compute_order_from_matrix_columns(input_path, header_size, columns, nb_rows, groupsize, subsampled_rows, order, error_factor)
             );
 
             LOG("DONE\n");
 
             //#ifdef KMCOMP_METRICS
-            //double entropy_ratio = kmcomp::get_entropy_ratio(input_path, header, columns, nb_rows, order);
+            //double entropy_ratio = kmcomp::get_entropy_ratio(input_path, header_size, columns, nb_rows, order);
             //metrics["2b_entropy_ratio"] = entropy_ratio;
             //#endif
 
@@ -494,10 +499,10 @@ int main(int argc, char ** argv)
         if(decompress)
         {
             LOG(kmcomp::log_str("kmcomp", "main", "Decompressing matrix... "));
-            decompress_matrix(input_path, input_ef_path, header, config.get_block_size(), output_path);
+            decompress_matrix(input_path, input_ef_path, header_size, config.get_block_size(), output_path);
             LOG("DONE\n");
 
-            nb_rows = (get_file_size(output_path) - header) / row_length;
+            nb_rows = (get_file_size(output_path) - header_size) / row_length;
         }
         else if(compress)
         {
@@ -510,7 +515,7 @@ int main(int argc, char ** argv)
            if(reorder)
            {
                 LOG(kmcomp::log_str("kmcomp", "main", "Reordering and compressing matrix... "));
-                reorder_and_compress_matrix(input_path, columns, nb_rows, input_file_size, header, config.get_block_size(), preset_level, order, output_path, output_ef_path);
+                reorder_and_compress_matrix(input_path, columns, nb_rows, input_file_size, header_size, config.get_block_size(), preset_level, order, output_path, output_ef_path);
                 LOG("DONE\n");
            }
            else
@@ -518,7 +523,7 @@ int main(int argc, char ** argv)
                 LOG(kmcomp::log_str("kmcomp", "main", "Compressing matrix... "));
                 KMCOMP_TIMED_BLOCK(
                     "3_time_compression(s)",
-                    compress_matrix(input_path, input_file_size, header, config.get_block_size(), preset_level, output_path, output_ef_path)
+                    compress_matrix(input_path, input_file_size, header_size, config.get_block_size(), preset_level, output_path, output_ef_path)
                 );
                 LOG("DONE\n");
             }
@@ -529,7 +534,7 @@ int main(int argc, char ** argv)
             LOG(kmcomp::log_str("kmcomp", "main", "Reordering matrix... "));
             KMCOMP_TIMED_BLOCK(
                 "3_time_reorder(s)",
-                kmcomp::reorder_matrix_columns(decompress ? output_path : input_path, header, columns, nb_rows, order)
+                kmcomp::reorder_matrix_columns(decompress ? output_path : input_path, header_size, columns, nb_rows, order)
             );
             LOG("DONE\n");
         }
