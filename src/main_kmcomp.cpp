@@ -73,39 +73,19 @@ inline void decompress_matrix(const std::string& input_path, const std::string& 
     if(!std::filesystem::exists(input_ef_path))
         throw kmcomp::kmcomp_error("kmcomp", "decompress_matrix", "Serialized IntContainer file was not found: '" + input_ef_path + "'");
 
-    int fd = open(input_path.c_str(), O_RDONLY);
-
-    if(fd < 0)
-        throw kmcomp::kmcomp_error("kmcomp", "decompress_matrix", "Open syscall failed to read '" + input_path + "' header");
-
-    char* header_buffer = new char[header_size];
-
-    if(read(fd, header_buffer, header_size) != header_size)
-    {
-        close(fd);
-        delete[] header_buffer;
-
-        throw kmcomp::kmcomp_error("kmcomp", "decompress_matrix", "Read syscall could not read full header, expected header size: " + std::to_string(header_size) + "");
-    }
-
-    close(fd);
-
     std::ofstream out_stream(output_path, std::ofstream::binary);
 
     if(!out_stream.good())
-    {
-        delete[] header_buffer;
         throw kmcomp::kmcomp_error("kmcomp", "decompress_matrix", "Could not open stream for decompressing matrix");
-    }
-
-    out_stream.write(header_buffer, header_size);
-    delete[] header_buffer;
 
     block_compressor::DecompressorZstd decompressor;
     block_compressor::IntContainerRaw<std::uint64_t> int_container;
 
     int_container.deserialize_file(input_ef_path);
+
     block_compressor::BlockDecompressor bd(input_path, block_size, decompressor, int_container, header_size);
+    out_stream.write(bd.raw_ptr(), header_size);
+
     bd.decompress_all(out_stream);
     out_stream.close();
 }
@@ -499,7 +479,10 @@ int main(int argc, char ** argv)
         if(decompress)
         {
             LOG(kmcomp::log_str("kmcomp", "main", "Decompressing matrix... "));
-            decompress_matrix(input_path, input_ef_path, header_size, config.get_block_size(), output_path);
+            KMCOMP_TIMED_BLOCK(
+                "3_time_decompression(s)",
+                decompress_matrix(input_path, input_ef_path, header_size, config.get_block_size(), output_path)
+            );
             LOG("DONE\n");
 
             nb_rows = (get_file_size(output_path) - header_size) / row_length;
