@@ -211,15 +211,15 @@ namespace kmcomp
             for(std::size_t j = 0; j + 1 < groupsize; ++j)
             {
                 original_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, j+offset, j+1+offset);
-                new_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, order[j+offset], order[j+1+offset]);;
+                new_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, order[j+offset], order[j+1+offset]);
             }
 
             offset += groupsize;
         }
 
+        KMCOMP_DECLARE_TIMER;
+        KMCOMP_START_TIMER;
         #ifdef KMCOMP_METRICS
-        DECLARE_TIMER;
-        START_TIMER;
         computed_distances += build_double_ended_NN(transposed_matrix, last_group_size, subsampled_rows, offset, order, error_factor);
         #else
         build_double_ended_NN(transposed_matrix, last_group_size, subsampled_rows, offset, order, error_factor);
@@ -227,13 +227,13 @@ namespace kmcomp
 
         for(std::size_t j = 0; j + 1 < last_group_size; ++j)
         {
-            original_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, j+offset, j+1+offset);;
+            original_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, j+offset, j+1+offset);
             new_consecutive_distances_sum += columns_hamming_distance(transposed_matrix, subsampled_rows, order[j+offset], order[j+1+offset]);
         }
 
+        KMCOMP_END_TIMER;
         #ifdef KMCOMP_METRICS
-        END_TIMER;
-        metrics["3_time_permutation(s)"] = GET_TIMER; 
+        metrics["3_time_permutation(s)"] = KMCOMP_GET_TIMER; 
 
         std::size_t max_computable_distances = (groupsize * (groupsize - 1) / 2) * (NB_GROUPS - 1) + last_group_size * (last_group_size - 1) / 2;
         metrics["2a_computed_distances"] = computed_distances;
@@ -462,9 +462,7 @@ namespace kmcomp
 
     void picompress(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, block_compressor::BlockCompressor& block_compr)
     {
-        #ifdef KMCOMP_METRICS
-        DECLARE_TIMER;
-        #endif
+        KMCOMP_DECLARE_TIMER;
 
         constexpr std::size_t TARGET_BLOCK_SIZE = 1 << 21; // 2 MiB
 
@@ -507,13 +505,14 @@ namespace kmcomp
         #ifdef KMCOMP_METRICS
         std::size_t time_compression = 0;
         std::size_t time_reorder = 0;
-        START_TIMER;
         #endif
+
+        KMCOMP_START_TIMER;
 
         block_compr.write_raw_data(mapped_file, HEADER);
 
+        KMCOMP_END_TIMER;
         #ifdef KMCOMP_METRICS
-        END_TIMER;
         time_compression += __integral_time;
         #endif
 
@@ -525,9 +524,7 @@ namespace kmcomp
         //Process each blocks except the last
         for(; i + 1 < NB_BLOCKS; ++i)
         {
-            #ifdef KMCOMP_METRICS
-            START_TIMER;
-            #endif
+            KMCOMP_START_TIMER;
 
             //Copy block from disk to memory
             std::memcpy(buffered_block, GET_BLOCK_PTR(i), BLOCK_SIZE);
@@ -535,25 +532,24 @@ namespace kmcomp
             //Reorder block
             reorder_block(buffered_block, tmp_block, row_buffer, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
 
-            #ifdef KMCOMP_METRICS
-            END_TIMER;
-            time_reorder += __integral_time;
+            KMCOMP_END_TIMER;
 
-            START_TIMER;
+            #ifdef KMCOMP_METRICS
+            time_reorder += __integral_time;
             #endif
+
+            KMCOMP_START_TIMER;
 
             //Bring buffered block to compressor
             block_compr.append_data(buffered_block, BLOCK_SIZE);
 
+            KMCOMP_END_TIMER;
             #ifdef KMCOMP_METRICS
-            END_TIMER;
             time_compression += __integral_time;
             #endif
         }
 
-        #ifdef KMCOMP_METRICS
-        START_TIMER;
-        #endif
+        KMCOMP_START_TIMER;
 
         //Copy last block from disk to memory
         std::memcpy(buffered_block, GET_BLOCK_PTR(i), last_block_size);
@@ -561,25 +557,26 @@ namespace kmcomp
         //Reorder last block
         reorder_block(buffered_block, tmp_block, row_buffer, BLOCK_NB_ROWS, ROW_LENGTH, ORDER);
 
+        KMCOMP_END_TIMER;
         #ifdef KMCOMP_METRICS
-        END_TIMER;
         time_reorder += __integral_time;
-
-        START_TIMER;
         #endif
+
+        KMCOMP_START_TIMER;
+
         //Bring last block to compressor
         block_compr.append_data(buffered_block, last_block_size);
 
         //Close
         block_compr.close();
 
-        #ifdef KMCOMP_METRICS
-        END_TIMER;
+        KMCOMP_END_TIMER;
 
+        #ifdef KMCOMP_METRICS
         time_compression += __integral_time;
         metrics["1_nb_blocks"] = NB_BLOCKS;
-        metrics["3_time_compression(s)"] = time_compression / 1000.0;
-        metrics["3_time_reorder(s)"] = time_reorder / 1000.0;
+        metrics["3_time_compression(s)"] = KMCOMP_TIME_AS_SECONDS(time_compression);
+        metrics["3_time_reorder(s)"] = KMCOMP_TIME_AS_SECONDS(time_reorder);
         #endif
 
         KMCOMP_DELETE_MATRIX(buffered_block);

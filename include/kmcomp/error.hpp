@@ -16,6 +16,11 @@ namespace kmcomp
         return "[WARNING] " + class_name + "::" + function_name + " : " + msg;
     }
 
+    inline std::string log_str(const std::string& class_name, const std::string& function_name, const std::string& msg)
+    {
+        return "[LOG] " + class_name + "::" + function_name + " : " + msg;
+    }
+
     class kmcomp_error : public std::runtime_error
     {
     public:

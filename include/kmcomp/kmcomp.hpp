@@ -16,25 +16,27 @@
     #include <chrono>
     #include <iostream>
 
-    #define DECLARE_TIMER std::chrono::time_point<std::chrono::high_resolution_clock> __start_timer, __stop_timer; std::size_t __integral_time
-    #define START_TIMER __start_timer = std::chrono::high_resolution_clock::now(); std::cout << std::flush
-    #define END_TIMER __stop_timer = std::chrono::high_resolution_clock::now(); __integral_time = static_cast<std::size_t>(std::chrono::duration_cast<std::chrono::milliseconds>(__stop_timer - __start_timer).count())
-    #define GET_TIMER (__integral_time / 1000.0)
-    #define SHOW_TIMER std::cout << std::setprecision(3) << GET_TIMER << "s" << std::endl
+    #define KMCOMP_DECLARE_TIMER std::chrono::time_point<std::chrono::high_resolution_clock> __start_timer, __stop_timer; std::size_t __integral_time
+    #define KMCOMP_START_TIMER __start_timer = std::chrono::high_resolution_clock::now(); std::cout << std::flush
+    #define KMCOMP_END_TIMER __stop_timer = std::chrono::high_resolution_clock::now(); __integral_time = static_cast<std::size_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(__stop_timer - __start_timer).count())
+    #define KMCOMP_TIME_AS_SECONDS(x) (x / 1000000000.0)
+    #define KMCOMP_GET_TIMER (KMCOMP_TIME_AS_SECONDS(__integral_time))
+    #define KMCOMP_SHOW_TIMER std::cout << std::setprecision(3) << KMCOMP_GET_TIMER << "s" << std::endl
 
     #define KMCOMP_TIMED_BLOCK(label, func) \
         do {                                \
-            START_TIMER;                    \
+            KMCOMP_START_TIMER;                    \
             func;                           \
-            END_TIMER;                      \
-            metrics[label] = GET_TIMER;     \
+            KMCOMP_END_TIMER;                      \
+            metrics[label] = KMCOMP_GET_TIMER;     \
         } while (0)
 #else
-    #define DECLARE_TIMER
-    #define START_TIMER
-    #define END_TIMER
-    #define GET_TIMER
-    #define SHOW_TIMER
+    #define KMCOMP_DECLARE_TIMER
+    #define KMCOMP_START_TIMER
+    #define KMCOMP_END_TIMER
+    #define KMCOMP_TIME_AS_SECONDS
+    #define KMCOMP_GET_TIMER
+    #define KMCOMP_SHOW_TIMER
 
     #define KMCOMP_TIMED_BLOCK(label, func) \
         do {                                \
