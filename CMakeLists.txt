@@ -12,7 +12,7 @@ project(
 
 option(KMCOMP_BUILD_MAIN "Build the kmcomp command-line executable" ON)
 option(KMCOMP_METRICS "Enable metrics support" OFF)
-option(KMCOMP_PORTABLE_BUILD "Prevent compiling using SIMD intrinsics" OFF)
+option(KMCOMP_PORTABLE_BUILD "Prevent compiling using machine specific instructions" OFF)
 
 # -----------------------------------------------------------------------------
 # Global C++ settings
