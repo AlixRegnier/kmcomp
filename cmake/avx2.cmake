@@ -20,6 +20,6 @@ macro(check_for_avx2)
           }
           return 0;
         }"
-        HAS_AVX2
+        KMCOMP_HAS_AVX2
     )
 endmacro()
