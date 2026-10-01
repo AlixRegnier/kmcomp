@@ -12,6 +12,7 @@ project(
 
 option(KMCOMP_BUILD_MAIN "Build the kmcomp command-line executable" ON)
 option(KMCOMP_METRICS "Enable metrics support" OFF)
+option(KMCOMP_PORTABLE_BUILD "Prevent compiling using SIMD intrinsics" OFF)
 
 # -----------------------------------------------------------------------------
 # Global C++ settings
@@ -35,8 +36,11 @@ if(KMCOMP_BUILD_TYPE STREQUAL "debug")
 else()
     set(KMCOMP_COMPILE_FLAGS
         -O3
-        -march=native
     )
+
+    if(NOT KMCOMP_PORTABLE_BUILD)
+        list(APPEND KMCOMP_COMPILE_FLAGS -march=native)
+    endif()
 endif()
 
 # -----------------------------------------------------------------------------
@@ -57,16 +61,19 @@ if(KMCOMP_ARCH MATCHES "^(x86_64|amd64|i386|i686)$")
     # Add any compiler/CPU configuration here if these files define
     # functions/macros used below.
     include(cmake/sse2.cmake)
-    include(cmake/avx2.cmake)
-
     check_for_sse2()
-    check_for_avx2()
+    
+    if(NOT KMCOMP_PORTABLE_BUILD)
+        include(cmake/avx2.cmake)
+        check_for_avx2()
+    endif()
 
-    if(HAS_AVX2)
+
+    if(KMCOMP_HAS_AVX2)
         message(STATUS "AVX2 support detected.")
         set(KMCOMP_SIMD_FLAGS "KMCOMP_USE_AVX2")
         list(APPEND KMCOMP_COMPILE_FLAGS -mavx2 -msse2)
-    elseif(HAS_SSE2)
+    elseif(KMCOMP_HAS_SSE2)
         message(STATUS "SSE2 support detected.")
         set(KMCOMP_SIMD_FLAGS "KMCOMP_USE_SSE2")
         list(APPEND KMCOMP_COMPILE_FLAGS -msse2)
