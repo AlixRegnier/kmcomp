@@ -425,7 +425,7 @@ namespace kmcomp
         alignas(64) char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
         alignas(64) char * tmp_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
 
-        char * row_buffer = new char[ROW_LENGTH];
+        char * row_buffer = new char[BLOCK_NB_ROWS/8];
 
         //Tell system that data will be accessed sequentially
         posix_madvise(mapped_file, FILE_SIZE, POSIX_MADV_SEQUENTIAL);
@@ -518,7 +518,7 @@ namespace kmcomp
 
         alignas(64) char * buffered_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
         alignas(64) char * tmp_block = KMCOMP_ALLOCATE_MATRIX(BLOCK_NB_ROWS, ROW_LENGTH*8);
-        char * row_buffer = new char[ROW_LENGTH];
+        char * row_buffer = new char[BLOCK_NB_ROWS/8];
 
         std::size_t i = 0;
         //Process each blocks except the last
