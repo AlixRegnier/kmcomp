@@ -1,0 +1,94 @@
+#ifndef KMCOMP_KMCOMP_H
+#define KMCOMP_KMCOMP_H
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include <block_compressor/block_compressor.hpp>
+
+
+#ifdef KMCOMP_METRICS
+    //Global JSON object for storing metrics
+    #include <nlohmann/json.hpp>
+    extern nlohmann::json metrics;
+
+    #include <chrono>
+    #include <iostream>
+
+    #define KMCOMP_DECLARE_TIMER std::chrono::time_point<std::chrono::high_resolution_clock> __start_timer, __stop_timer; std::size_t __integral_time
+    #define KMCOMP_START_TIMER __start_timer = std::chrono::high_resolution_clock::now(); std::cout << std::flush
+    #define KMCOMP_END_TIMER __stop_timer = std::chrono::high_resolution_clock::now(); __integral_time = static_cast<std::size_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(__stop_timer - __start_timer).count())
+    #define KMCOMP_TIME_AS_SECONDS(x) (x / 1000000000.0)
+    #define KMCOMP_GET_TIMER (KMCOMP_TIME_AS_SECONDS(__integral_time))
+    #define KMCOMP_SHOW_TIMER std::cout << std::setprecision(3) << KMCOMP_GET_TIMER << "s" << std::endl
+
+    #define KMCOMP_TIMED_BLOCK(label, func) \
+        do {                                \
+            KMCOMP_START_TIMER;                    \
+            func;                           \
+            KMCOMP_END_TIMER;                      \
+            metrics[label] = KMCOMP_GET_TIMER;     \
+        } while (0)
+#else
+    #define KMCOMP_DECLARE_TIMER
+    #define KMCOMP_START_TIMER
+    #define KMCOMP_END_TIMER
+    #define KMCOMP_TIME_AS_SECONDS
+    #define KMCOMP_GET_TIMER
+    #define KMCOMP_SHOW_TIMER
+
+    #define KMCOMP_TIMED_BLOCK(label, func) \
+        do {                                \
+            func;                           \
+        } while (0)
+#endif
+
+#define KMCOMP_REGRESSION_SLOPE 2.961897441
+#define KMCOMP_REGRESSION_INTERCEPT 0.816400508
+
+#define KMCOMP_ALLOCATE_MATRIX(nrows, ncols) new char[(nrows)*((ncols)/8)]
+#define KMCOMP_DELETE_MATRIX(ptr) delete[] (ptr)
+
+namespace kmcomp
+{
+    #ifdef KMCOMP_METRICS
+    double get_entropy_ratio(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, std::size_t SAMPLED_BYTES = 8388608);
+    #endif
+
+    constexpr std::size_t get_nb_blocks(std::size_t size, std::size_t block_size)
+    {
+        return (size + block_size - 1) / block_size;
+    }
+
+    //Return how much the compression will be improved according to metric returned by 'compute_order_from_matrix_columns'
+    constexpr double predict_metric_from_threshold(double threshold)
+    {
+        return threshold * KMCOMP_REGRESSION_SLOPE + KMCOMP_REGRESSION_INTERCEPT;
+    }
+
+    constexpr double predict_threshold_from_metric(double metric)
+    {
+        return (metric - KMCOMP_REGRESSION_INTERCEPT) / KMCOMP_REGRESSION_SLOPE;
+    }
+
+    //Start multiple path TSP instances to be solved using Nearest-Neighbor, need 
+    double compute_order_from_matrix_columns(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::size_t GROUPSIZE, const std::size_t SUBSAMPLED_ROWS, std::vector<std::uint64_t>& order, double error_factor = 0.0);
+
+    //Reorder matrix columns (bit-swapping on memory-mapped file)
+    void reorder_matrix_columns(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER);
+
+    //Reorder matrix columns (bit-swapping on memory-mapped file)
+    void picompress(const std::string& MATRIX_PATH, const std::size_t HEADER, const std::size_t NB_COLS, const std::size_t NB_ROWS, const std::vector<std::uint64_t>& ORDER, block_compressor::BlockCompressor& block_compr);
+
+    //Reorder matrix rows (row-swapping on memory-mapped file)
+    void reorder_matrix_rows(char* mapped_file, char * row_buffer, const std::size_t HEADER, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER);
+
+    //Reorder block
+    void reorder_block(char * block, char * tmp_block, char * row_buffer, const std::size_t BLOCK_NB_ROWS, const std::size_t ROW_LENGTH, const std::vector<std::uint64_t>& ORDER);
+
+    //Get an order that can be used to retrieve original matrix
+    void reverse_order(const std::vector<std::uint64_t>& ORDER, std::vector<std::uint64_t>& reversed_order);
+};
+
+#endif

@@ -20,6 +20,6 @@ macro(check_for_sse2)
           }
           return 0;
         }"
-        HAS_SSE2
+        KMCOMP_HAS_SSE2
     )
 endmacro()

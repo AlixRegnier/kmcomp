@@ -1,5 +1,10 @@
-#include <tsp.h>
+
 #include <deque>
+#include <stdexcept>
+
+#include <vptree.hpp>
+
+#include <kmcomp/tsp.hpp>
 
 #if defined(KMCOMP_USE_AVX2)
 #define KMCOMP_USE_SSE2 1
@@ -271,98 +276,94 @@ uint64_t hamming_distance_unaligned(const uint8_t* a, const uint8_t* b, const ui
 }
 #endif
 
-
 namespace kmcomp {
 
     //TSP path filled by both ends, less sensitive of the first chosen vertex, returns the number of computed distances
-    std::size_t build_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order)
+    #ifdef KMCOMP_METRICS
+    std::size_t build_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order, double error_factor)
+    #else
+    void build_double_ended_NN(const char* const MATRIX, const std::size_t COLUMNS, const std::size_t SUBSAMPLED_ROWS, const std::size_t OFFSET, std::vector<std::uint64_t>& order, double error_factor)
+    #endif
     {
-        //Pick a random first vertex
-        std::uint64_t firstVertex = RNG::rand_uint32_t(0, COLUMNS);
-        
-        //Vector of added vertices (set true for the first vertex)
-        std::vector<bool> alreadyAdded;
-        alreadyAdded.resize(COLUMNS);
-        alreadyAdded[firstVertex] = true;
-        
         //Deque for building path with first vertex as starting point
-        std::deque<std::uint64_t> orderDeque = {firstVertex};
+        std::deque<std::uint64_t> orderDeque;
 
-        //Build vector of indices for VPTree
+        //Build vector of vertices for VPTree
         std::vector<std::uint64_t> vertices;
         vertices.resize(COLUMNS);
+
         for(std::size_t i = 0; i < vertices.size(); ++i)
             vertices[i] = i;
 
+        //Construct metric tree
+
+        #ifdef KMCOMP_METRICS
+        //Computed distances counter
         std::size_t counter = 0;
+        vptree::VPTree<std::uint64_t> metric_tree(vertices.begin(), vertices.end(), [=, &counter](std::uint64_t a, std::uint64_t b) -> double {
+            ++counter;
+            return columns_hamming_distance(MATRIX, SUBSAMPLED_ROWS, a+OFFSET, b+OFFSET);
+        });
+        #else
+        vptree::VPTree<std::uint64_t> metric_tree(vertices.begin(), vertices.end(), [=](std::uint64_t a, std::uint64_t b) -> double {
+            return columns_hamming_distance(MATRIX, SUBSAMPLED_ROWS, a+OFFSET, b+OFFSET);
+        });
+        #endif
 
-        VPTree<std::uint64_t> root(vertices, [=, &counter](std::uint64_t a, std::uint64_t b) -> double {
-                ++counter;
-                return columns_hamming_distance(MATRIX, SUBSAMPLED_ROWS, a+OFFSET, b+OFFSET);
-            });
+        //Pick a random first vertex
+        {
+            vptree::vertex_t first_vertex = metric_tree.get_random_unvisited_vertex();
+            metric_tree.set_vertex_as_visited(first_vertex);
+            orderDeque.push_back(static_cast<std::uint64_t>(first_vertex));
 
-        //Map VPTree nodes in a vector
-        std::vector<VPTree<std::uint64_t>*> nodes_map;
-        nodes_map.resize(COLUMNS);
-        VPTree<std::uint64_t>::map_nodes(&root, nodes_map);
-
-        //Update vertex flag
-        VPTree<std::uint64_t>::update(nodes_map[firstVertex], alreadyAdded);
-
-        //Find second vertex
-        IndexDistance second = find_closest_vertex(root, firstVertex, alreadyAdded);
-        
-        //Added second vertex to data structures
-        orderDeque.push_back(second.index);
-        alreadyAdded[second.index] = true;
-        VPTree<std::uint64_t>::update(nodes_map[second.index], alreadyAdded);
+            //Add second vertex to path
+            vptree::vertex_t second_vertex = metric_tree.get_nearest_unvisited_neighbor(first_vertex, error_factor).vertex;
+            metric_tree.set_vertex_as_visited(second_vertex);
+            orderDeque.push_back(static_cast<std::uint64_t>(second_vertex));
+        }
 
         //Find closest vertices from path front and back
-        IndexDistance a = find_closest_vertex(root, orderDeque.front(), alreadyAdded);
-        IndexDistance b = find_closest_vertex(root, orderDeque.back(), alreadyAdded);
+        vptree::nn_t<std::uint64_t> a = metric_tree.get_nearest_unvisited_neighbor(orderDeque.front(), error_factor);
+        vptree::nn_t<std::uint64_t> b = metric_tree.get_nearest_unvisited_neighbor(orderDeque.back(), error_factor);
 
         //Find next vertices to add by checking which is the minimum to take
-        for(std::size_t i = 2; i < COLUMNS; ++i)
+        //Start at 3, two were handled before loop, last is handled after
+        for(std::size_t i = 3; i < COLUMNS; ++i)
         {
             if(a.distance < b.distance)
             {
-                orderDeque.push_front(a.index);
-                alreadyAdded[a.index] = true;
-                VPTree<std::uint64_t>::update(nodes_map[a.index], alreadyAdded);
+                metric_tree.set_vertex_as_visited(a.vertex);
+                orderDeque.push_front(static_cast<std::uint64_t>(a.vertex));
 
-                if(a.index == b.index)
-                    b = find_closest_vertex(root, orderDeque.back(), alreadyAdded);
+                if(a.vertex == b.vertex)
+                    b = metric_tree.get_nearest_unvisited_neighbor(orderDeque.back(), error_factor);
 
-                a = find_closest_vertex(root, orderDeque.front(), alreadyAdded);
+                a = metric_tree.get_nearest_unvisited_neighbor(orderDeque.front(), error_factor);
             }
             else
             {
+                metric_tree.set_vertex_as_visited(b.vertex);
+                orderDeque.push_back(static_cast<std::uint64_t>(b.vertex));
 
-                orderDeque.push_back(b.index);
-                alreadyAdded[b.index] = true;
-                VPTree<std::uint64_t>::update(nodes_map[b.index], alreadyAdded);
+                if(b.vertex == a.vertex)
+                    a = metric_tree.get_nearest_unvisited_neighbor(orderDeque.front(), error_factor);
 
-                if(b.index == a.index)
-                    a = find_closest_vertex(root, orderDeque.front(), alreadyAdded);
-
-                b = find_closest_vertex(root, orderDeque.back(), alreadyAdded);
+                b = metric_tree.get_nearest_unvisited_neighbor(orderDeque.back(), error_factor);
             }
         }
+
+        if(a.distance < b.distance)
+            orderDeque.push_front(static_cast<std::uint64_t>(a.vertex));
+        else
+            orderDeque.push_back(static_cast<std::uint64_t>(b.vertex));
 
         //Store global order
         for(std::size_t i = 0; i < COLUMNS; ++i)
             order[i+OFFSET] = orderDeque[i] + OFFSET; //Add offset because columns are addressed by their global location
-        
+
+        #ifdef KMCOMP_METRICS
         return counter;
-    }
-
-    IndexDistance find_closest_vertex(VPTree<std::uint64_t>& VPTREE, const std::uint64_t VERTEX, const std::vector<bool>& ALREADY_ADDED)
-    {
-        IndexDistance nn = { 0, 2.0 };
-
-        VPTREE.get_unvisited_nearest_neighbor(VERTEX, ALREADY_ADDED, &nn.distance, &nn.index);
-
-        return nn;
+        #endif
     }
 
     std::size_t hamming_distance(const std::uint8_t* a, const std::uint8_t* b, const std::size_t size)
