@@ -6,7 +6,7 @@ set(BLOCK_COMPRESSOR_ENABLE_ZSTD ON CACHE BOOL
 
 FetchContent_Declare(block_compressor
   GIT_REPOSITORY https://github.com/AlixRegnier/block_compressor.git
-  GIT_TAG dev
+  GIT_TAG "v0.1"
 )
 FetchContent_MakeAvailable(block_compressor)
 
