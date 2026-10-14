@@ -22,6 +22,18 @@ nlohmann::json metrics;
 #define INT_CONTAINER_EXT ".ef"
 #define LOG(msg) do { if(verbose) std::cout << msg << std::flush; } while(0)
 
+unsigned int ceil_log2(unsigned int n) {
+    if (n <= 1) return 0;
+
+    unsigned int result = 0;
+    --n;
+    while (n > 0) {
+        ++result;
+        n >>= 1;
+    }
+    return result;
+}
+
 void usage()
 {
     std::cerr << \
@@ -118,9 +130,9 @@ inline void write_order_to_file(const std::string& out_order_path, const std::ve
     close(fd);
 }
 
-inline void compress_matrix(const std::string& input_path, std::size_t file_size, std::size_t header_size, std::size_t block_size, std::int64_t preset, const std::string& output_path, const std::string& output_ef_path)
+inline void compress_matrix(const std::string& input_path, std::size_t file_size, std::size_t header_size, std::size_t block_size, std::int64_t preset, unsigned wlog, const std::string& output_path, const std::string& output_ef_path)
 {
-    block_compressor::CompressorZstd compressor(preset);
+    block_compressor::CompressorZstd compressor(preset, wlog);
     block_compressor::IntContainerRaw<std::uint64_t> int_container;
     int_container.reserve(file_size / block_size + 2);
     block_compressor::BlockCompressor bc(output_path, block_size, compressor, int_container);
@@ -148,11 +160,11 @@ inline void compress_matrix(const std::string& input_path, std::size_t file_size
     int_container.serialize_file(output_ef_path);
 }
 
-inline void reorder_and_compress_matrix(const std::string& input_path, std::size_t columns, std::size_t nb_rows, std::size_t file_size, std::size_t header_size, std::size_t block_size, std::size_t preset, const std::vector<uint64_t>& order, const std::string& output_path, const std::string& output_ef_path)
+inline void reorder_and_compress_matrix(const std::string& input_path, std::size_t columns, std::size_t nb_rows, std::size_t file_size, std::size_t header_size, std::size_t block_size, std::size_t preset, unsigned wlog, const std::vector<uint64_t>& order, const std::string& output_path, const std::string& output_ef_path)
 {
     std::size_t nb_blocks = kmcomp::get_nb_blocks(file_size - header_size, block_size) + 1;
 
-    block_compressor::CompressorZstd compressor(preset);
+    block_compressor::CompressorZstd compressor(preset, wlog);
     block_compressor::IntContainerRaw<std::uint64_t> int_container;
     int_container.reserve(nb_blocks);
     block_compressor::BlockCompressor bc(output_path, block_size, compressor, int_container);
@@ -414,6 +426,8 @@ int main(int argc, char ** argv)
             config.set_elements_per_row(columns, false);
             config.set_header_size(header_size);
             config.target_block_size(target_block_size);
+
+            config.set_wlog(ceil_log2(config.get_block_size()));
             config.export_config_file(config_path);
             LOG("DONE\n");
         }
@@ -498,7 +512,7 @@ int main(int argc, char ** argv)
            if(reorder)
            {
                 LOG(kmcomp::log_str("kmcomp", "main", "Reordering and compressing matrix... "));
-                reorder_and_compress_matrix(input_path, columns, nb_rows, input_file_size, header_size, config.get_block_size(), preset_level, order, output_path, output_ef_path);
+                reorder_and_compress_matrix(input_path, columns, nb_rows, input_file_size, header_size, config.get_block_size(), preset_level, config.get_wlog(), order, output_path, output_ef_path);
                 LOG("DONE\n");
            }
            else
@@ -506,7 +520,7 @@ int main(int argc, char ** argv)
                 LOG(kmcomp::log_str("kmcomp", "main", "Compressing matrix... "));
                 KMCOMP_TIMED_BLOCK(
                     "3_time_compression(s)",
-                    compress_matrix(input_path, input_file_size, header_size, config.get_block_size(), preset_level, output_path, output_ef_path)
+                    compress_matrix(input_path, input_file_size, header_size, config.get_block_size(), preset_level, config.get_wlog(), output_path, output_ef_path)
                 );
                 LOG("DONE\n");
             }
